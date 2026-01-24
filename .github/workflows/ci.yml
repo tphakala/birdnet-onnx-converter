@@ -89,7 +89,7 @@ jobs:
 
       - name: Build birda
         run: |
-          git clone https://github.com/tphakala/birda.git /tmp/birda
+          git clone --depth 1 --branch v1.3.0 https://github.com/tphakala/birda.git /tmp/birda
           cd /tmp/birda && cargo build --release
           echo "/tmp/birda/target/release" >> $GITHUB_PATH
 

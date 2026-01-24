@@ -68,8 +68,9 @@ def compare(
         Tuple of (passed, list of error messages)
     """
     errors = []
-    baseline_map = {(d.start, d.end, d.scientific_name): d for d in baseline}
-    test_map = {(d.start, d.end, d.scientific_name): d for d in test}
+    # Round float keys to 2 decimal places to avoid floating-point comparison issues
+    baseline_map = {(round(d.start, 2), round(d.end, 2), d.scientific_name): d for d in baseline}
+    test_map = {(round(d.start, 2), round(d.end, 2), d.scientific_name): d for d in test}
 
     baseline_keys = set(baseline_map.keys())
     test_keys = set(test_map.keys())

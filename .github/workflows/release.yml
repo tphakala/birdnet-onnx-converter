@@ -58,7 +58,7 @@ jobs:
 
       - name: Build birda
         run: |
-          git clone https://github.com/tphakala/birda.git /tmp/birda
+          git clone --depth 1 --branch v1.3.0 https://github.com/tphakala/birda.git /tmp/birda
           cd /tmp/birda && cargo build --release
           echo "/tmp/birda/target/release" >> $GITHUB_PATH
 
@@ -87,7 +87,7 @@ jobs:
             --tolerance 0.01
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             build/BirdNET_GLOBAL_6K_V2.4_fp32.onnx
