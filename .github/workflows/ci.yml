@@ -109,7 +109,7 @@ jobs:
           birda tests/fixtures/test_audio.wav \
             --model tests/output/BirdNET_fp32.onnx \
             --output-dir tests/output/fp32 \
-            --format birdnet \
+            --format csv \
             --min-confidence 0.1
           mv tests/output/fp32/*.csv tests/output/fp32_predictions.csv
 
@@ -127,7 +127,7 @@ jobs:
           birda tests/fixtures/test_audio.wav \
             --model tests/output/BirdNET_fp16.onnx \
             --output-dir tests/output/fp16 \
-            --format birdnet \
+            --format csv \
             --min-confidence 0.1
           mv tests/output/fp16/*.csv tests/output/fp16_predictions.csv
 

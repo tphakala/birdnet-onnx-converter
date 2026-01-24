@@ -68,7 +68,7 @@ jobs:
           birda tests/fixtures/test_audio.wav \
             --model build/BirdNET_GLOBAL_6K_V2.4_fp32.onnx \
             --output-dir build/fp32 \
-            --format birdnet \
+            --format csv \
             --min-confidence 0.1
           mv build/fp32/*.csv build/fp32_predictions.csv
           python tests/compare_predictions.py \
@@ -82,7 +82,7 @@ jobs:
           birda tests/fixtures/test_audio.wav \
             --model build/BirdNET_GLOBAL_6K_V2.4_fp16.onnx \
             --output-dir build/fp16 \
-            --format birdnet \
+            --format csv \
             --min-confidence 0.1
           mv build/fp16/*.csv build/fp16_predictions.csv
           python tests/compare_predictions.py \
