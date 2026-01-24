@@ -50,12 +50,8 @@ def load_keras_model_manual(keras_path: str):
             layer_config = layer_cfg["config"]
 
             if class_name == "InputLayer":
-                batch_shape = layer_config.get(
-                    "batch_input_shape", layer_config.get("batch_shape")
-                )
-                inputs = tf.keras.Input(
-                    shape=batch_shape[1:], name=layer_config["name"]
-                )
+                batch_shape = layer_config.get("batch_input_shape", layer_config.get("batch_shape"))
+                inputs = tf.keras.Input(shape=batch_shape[1:], name=layer_config["name"])
                 x = inputs
             elif class_name == "Dense":
                 layer = tf.keras.layers.Dense(
@@ -274,9 +270,7 @@ def main():
         if args.onnx_only:
             print(f"\nConverting to ONNX: {onnx_path}")
             try:
-                convert_tflite_to_onnx(
-                    str(input_path), str(onnx_path), opset=args.opset
-                )
+                convert_tflite_to_onnx(str(input_path), str(onnx_path), opset=args.opset)
                 onnx_size = onnx_path.stat().st_size / (1024 * 1024)
                 print(f"  ONNX model saved ({onnx_size:.2f} MB)")
             except Exception as e:

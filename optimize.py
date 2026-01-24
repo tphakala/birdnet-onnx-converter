@@ -57,11 +57,7 @@ def create_dft_matrix(fft_size: int) -> np.ndarray:
 
 def get_tensor_shape(model: onnx.ModelProto, tensor_name: str) -> Optional[list[int]]:
     """Get shape of a tensor from value_info or initializers."""
-    for vi in (
-        list(model.graph.value_info)
-        + list(model.graph.input)
-        + list(model.graph.output)
-    ):
+    for vi in list(model.graph.value_info) + list(model.graph.input) + list(model.graph.output):
         if vi.name == tensor_name:
             shape = []
             for dim in vi.type.tensor_type.shape.dim:
@@ -78,9 +74,7 @@ def get_tensor_shape(model: onnx.ModelProto, tensor_name: str) -> Optional[list[
     return None
 
 
-def find_node_by_output(
-    model: onnx.ModelProto, output_name: str
-) -> Optional[onnx.NodeProto]:
+def find_node_by_output(model: onnx.ModelProto, output_name: str) -> Optional[onnx.NodeProto]:
     """Find the node that produces a given output."""
     for node in model.graph.node:
         if output_name in node.output:
@@ -88,9 +82,7 @@ def find_node_by_output(
     return None
 
 
-def find_nodes_by_input(
-    model: onnx.ModelProto, input_name: str
-) -> list[onnx.NodeProto]:
+def find_nodes_by_input(model: onnx.ModelProto, input_name: str) -> list[onnx.NodeProto]:
     """Find all nodes that consume a given input."""
     return [node for node in model.graph.node if input_name in node.input]
 
@@ -175,21 +167,15 @@ def replace_dft_with_matmul(model: onnx.ModelProto) -> tuple[onnx.ModelProto, in
         slice_output = slice_node.output[0]
         num_freqs = fft_size // 2 + 1
 
-        print(
-            f"  Replacing DFT {node.name} (fft_size={fft_size}, num_freqs={num_freqs})"
-        )
+        print(f"  Replacing DFT {node.name} (fft_size={fft_size}, num_freqs={num_freqs})")
 
         dft_matrix = create_dft_matrix(fft_size)
         dft_matrix_name = f"{node.name}_dft_matrix"
-        dft_init = numpy_helper.from_array(
-            dft_matrix.astype(np.float32), dft_matrix_name
-        )
+        dft_init = numpy_helper.from_array(dft_matrix.astype(np.float32), dft_matrix_name)
         initializers_to_add.append(dft_init)
 
         squeeze_axes_name = f"{node.name}_squeeze_axes"
-        squeeze_axes = numpy_helper.from_array(
-            np.array([-1], dtype=np.int64), squeeze_axes_name
-        )
+        squeeze_axes = numpy_helper.from_array(np.array([-1], dtype=np.int64), squeeze_axes_name)
         initializers_to_add.append(squeeze_axes)
 
         squeezed_name = f"{node.name}_squeezed"
@@ -290,9 +276,7 @@ def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> tuple[onnx.ModelProto,
                     break
 
         if fft_size is None:
-            print(
-                f"  Warning: Could not determine FFT size for RFFT2D {node.name}, skipping"
-            )
+            print(f"  Warning: Could not determine FFT size for RFFT2D {node.name}, skipping")
             continue
 
         consumers = find_nodes_by_input(model, rfft_output)
@@ -316,15 +300,11 @@ def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> tuple[onnx.ModelProto,
 
         unsqueeze_input = producer.input[0]
 
-        print(
-            f"  Replacing RFFT2D {node.name} (fft_size={fft_size}, num_freqs={num_freqs})"
-        )
+        print(f"  Replacing RFFT2D {node.name} (fft_size={fft_size}, num_freqs={num_freqs})")
 
         dft_matrix = create_dft_matrix(fft_size)
         dft_matrix_name = f"{node.name}_dft_matrix"
-        dft_init = numpy_helper.from_array(
-            dft_matrix.astype(np.float32), dft_matrix_name
-        )
+        dft_init = numpy_helper.from_array(dft_matrix.astype(np.float32), dft_matrix_name)
         initializers_to_add.append(dft_init)
 
         matmul_node = helper.make_node(
@@ -622,15 +602,12 @@ def fuse_transpose_patterns(model: onnx.ModelProto) -> tuple[onnx.ModelProto, in
             original_input = producer.input[0]
             for other_node in model.graph.node:
                 other_node.input[:] = [
-                    original_input if x == transpose_output else x
-                    for x in other_node.input
+                    original_input if x == transpose_output else x for x in other_node.input
                 ]
             nodes_to_remove.extend([producer, node])
             replacements += 1
         else:
-            print(
-                f"  Fusing Transposes: {producer.name} + {node.name} -> perm={composed_perm}"
-            )
+            print(f"  Fusing Transposes: {producer.name} + {node.name} -> perm={composed_perm}")
             node.input[0] = producer.input[0]
             for attr in node.attribute:
                 if attr.name == "perm":
@@ -677,9 +654,7 @@ def convert_int32_to_int64(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int
         from onnxscript import rewriter
         from onnxscript.rewriter import pattern
     except ImportError as e:
-        print(
-            f"  onnx_ir or onnxscript not available ({e}), skipping INT32->INT64 conversion"
-        )
+        print(f"  onnx_ir or onnxscript not available ({e}), skipping INT32->INT64 conversion")
         return model, 0
 
     # Convert to IR representation
@@ -715,9 +690,7 @@ def convert_int32_to_int64(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int
             int64_array = int32_array.astype(np.int64)
 
             # Create new INT64 initializer using ir.val() helper
-            new_initializer = ir.val(
-                initializer.name, const_value=ir.tensor(int64_array)
-            )
+            new_initializer = ir.val(initializer.name, const_value=ir.tensor(int64_array))
 
             # Replace in initializers dict
             ir_model.graph.initializers.pop(initializer.name)
@@ -792,9 +765,7 @@ def optimize_with_onnxslim(model: onnx.ModelProto) -> onnx.ModelProto:
     return model
 
 
-def optimize_with_onnxscript(
-    model: onnx.ModelProto, remove_casts: bool = True
-) -> onnx.ModelProto:
+def optimize_with_onnxscript(model: onnx.ModelProto, remove_casts: bool = True) -> onnx.ModelProto:
     """Run onnxscript optimizer with optional Cast removal."""
     try:
         import onnx_ir as ir
@@ -1138,16 +1109,10 @@ def optimize_model(input_path: str) -> Optional[onnx.ModelProto]:
     print(
         f"  GlobalAveragePool: {initial_ops.get('GlobalAveragePool', 0)} -> {final_ops.get('GlobalAveragePool', 0)}"
     )
-    print(
-        f"  Squeeze: {initial_ops.get('Squeeze', 0)} -> {final_ops.get('Squeeze', 0)}"
-    )
+    print(f"  Squeeze: {initial_ops.get('Squeeze', 0)} -> {final_ops.get('Squeeze', 0)}")
     print(f"  Cast: {initial_ops.get('Cast', 0)} -> {final_ops.get('Cast', 0)}")
-    print(
-        f"  Transpose: {initial_ops.get('Transpose', 0)} -> {final_ops.get('Transpose', 0)}"
-    )
-    print(
-        f"  ReduceMean: {initial_ops.get('ReduceMean', 0)} -> {final_ops.get('ReduceMean', 0)}"
-    )
+    print(f"  Transpose: {initial_ops.get('Transpose', 0)} -> {final_ops.get('Transpose', 0)}")
+    print(f"  ReduceMean: {initial_ops.get('ReduceMean', 0)} -> {final_ops.get('ReduceMean', 0)}")
     print(f"  MatMul: {initial_ops.get('MatMul', 0)} -> {final_ops.get('MatMul', 0)}")
 
     # Verify
@@ -1169,9 +1134,7 @@ def main():
     parser.add_argument(
         "--output", "-o", required=True, help="Output base path (without extension)"
     )
-    parser.add_argument(
-        "--fp32-only", action="store_true", help="Only output FP32 model"
-    )
+    parser.add_argument("--fp32-only", action="store_true", help="Only output FP32 model")
     parser.add_argument("--no-fp16", action="store_true", help="Skip FP16 conversion")
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantization")
     parser.add_argument(
@@ -1223,9 +1186,7 @@ def main():
             print(f"[FP16] Saving: {fp16_path}")
             onnx.save(model_fp16, fp16_path)
             fp16_size = Path(fp16_path).stat().st_size / (1024 * 1024)
-            print(
-                f"  Size: {fp16_size:.2f} MB ({100 * fp16_size / fp32_size:.1f}% of FP32)"
-            )
+            print(f"  Size: {fp16_size:.2f} MB ({100 * fp16_size / fp32_size:.1f}% of FP32)")
         else:
             fp16_size = None
             print("  FP16 conversion skipped")
@@ -1239,9 +1200,7 @@ def main():
         success = quantize_to_int8_dynamic(fp32_path, int8_path)
         if success:
             int8_size = Path(int8_path).stat().st_size / (1024 * 1024)
-            print(
-                f"  Size: {int8_size:.2f} MB ({100 * int8_size / fp32_size:.1f}% of FP32)"
-            )
+            print(f"  Size: {int8_size:.2f} MB ({100 * int8_size / fp32_size:.1f}% of FP32)")
         else:
             int8_size = None
             print("  INT8 quantization skipped")
