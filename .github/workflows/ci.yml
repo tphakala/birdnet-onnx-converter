@@ -49,7 +49,7 @@ jobs:
     needs: [lint, typecheck]
     strategy:
       matrix:
-        # Python 3.12 excluded: tf2onnx requires numpy<1.24 which has no 3.12 wheels
+        # Python 3.11 used; 3.12+ support depends on tensorflow compatibility
         python-version: ["3.11"]
 
     steps:
@@ -65,17 +65,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Use venv to isolate from container's pre-installed packages
           python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
-          # Pin tensorflow 2.14 + numpy<1.24 for tf2onnx compatibility (np.bool removed in 1.24)
-          pip install "numpy>=1.21,<1.24"
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-          pip install "tensorflow>=2.14,<2.15" tf2onnx
-          # Reinstall numpy<1.24 to override any dependency upgrades
-          pip install "numpy>=1.21,<1.24"
+          pip install -r requirements-tflite.txt
 
       - name: Run pytest
         run: |
