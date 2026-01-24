@@ -71,6 +71,10 @@ else
 fi
 
 echo
+echo "Setting up git hooks..."
+git config core.hooksPath .githooks 2>/dev/null && echo "  Git hooks enabled" || echo "  Git hooks skipped (not in a git repo)"
+
+echo
 echo "=== Setup Complete ==="
 echo
 echo "To use the converter:"

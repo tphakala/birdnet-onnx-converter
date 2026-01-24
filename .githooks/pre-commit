@@ -1,0 +1,25 @@
+#!/bin/bash
+# Pre-commit hook to format Python files with ruff
+
+# Get list of staged Python files
+STAGED_PY_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$')
+
+if [ -n "$STAGED_PY_FILES" ]; then
+    echo "Formatting staged Python files with ruff..."
+    
+    # Check if ruff is available
+    if ! command -v ruff &> /dev/null; then
+        echo "Warning: ruff not found, skipping format check"
+        exit 0
+    fi
+    
+    # Format the files
+    echo "$STAGED_PY_FILES" | xargs ruff format
+    
+    # Re-add the formatted files to staging
+    echo "$STAGED_PY_FILES" | xargs git add
+    
+    echo "Files formatted and re-staged"
+fi
+
+exit 0
