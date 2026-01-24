@@ -50,8 +50,12 @@ def load_keras_model_manual(keras_path: str):
             layer_config = layer_cfg["config"]
 
             if class_name == "InputLayer":
-                batch_shape = layer_config.get("batch_input_shape", layer_config.get("batch_shape"))
-                inputs = tf.keras.Input(shape=batch_shape[1:], name=layer_config["name"])
+                batch_shape = layer_config.get(
+                    "batch_input_shape", layer_config.get("batch_shape")
+                )
+                inputs = tf.keras.Input(
+                    shape=batch_shape[1:], name=layer_config["name"]
+                )
                 x = inputs
             elif class_name == "Dense":
                 layer = tf.keras.layers.Dense(
@@ -240,6 +244,11 @@ def main():
         action="store_true",
         help="Only convert to ONNX (for TFLite input)",
     )
+    parser.add_argument(
+        "--unsafe-fallback",
+        action="store_true",
+        help="Allow fallback to tf.keras.models.load_model (may execute arbitrary code)",
+    )
     args = parser.parse_args()
 
     # Validate input
@@ -264,7 +273,9 @@ def main():
         if args.onnx_only:
             print(f"\nConverting to ONNX: {onnx_path}")
             try:
-                convert_tflite_to_onnx(str(input_path), str(onnx_path), opset=args.opset)
+                convert_tflite_to_onnx(
+                    str(input_path), str(onnx_path), opset=args.opset
+                )
                 onnx_size = onnx_path.stat().st_size / (1024 * 1024)
                 print(f"  ONNX model saved ({onnx_size:.2f} MB)")
             except Exception as e:
@@ -286,7 +297,14 @@ def main():
         print("  Model loaded successfully (manual extraction)")
     except Exception as e:
         print(f"  Manual loading failed: {e}")
-        print("  Trying standard tf.keras.models.load_model...")
+        if not args.unsafe_fallback:
+            print("  Error: Safe model loading failed.")
+            print("  The fallback method (tf.keras.models.load_model) can execute")
+            print("  arbitrary code from untrusted model files.")
+            print("  Use --unsafe-fallback to allow this fallback method.")
+            return 1
+        print("  WARNING: Using unsafe fallback (tf.keras.models.load_model)")
+        print("  This may execute arbitrary code from the model file!")
         import tensorflow as tf
 
         model = tf.keras.models.load_model(input_path)
