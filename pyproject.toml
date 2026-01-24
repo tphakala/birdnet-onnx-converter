@@ -1,0 +1,29 @@
+[project]
+name = "birdnet-onnx-converter"
+version = "1.0.0"
+description = "Convert and optimize BirdNET models for ONNX Runtime"
+requires-python = ">=3.9"
+readme = "README.md"
+license = {text = "MIT"}
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"

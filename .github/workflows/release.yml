@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install cmake
+        run: sudo apt-get update && sudo apt-get install -y cmake
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install tensorflow tf2onnx
+
+      - name: Create build directory
+        run: mkdir -p build
+
+      - name: Convert TFLite to ONNX
+        run: |
+          python convert.py \
+            --input tests/fixtures/BirdNET_GLOBAL_6K_V2.4_Model_FP32.tflite \
+            --output-dir build/ \
+            --onnx-only
+
+      - name: Optimize ONNX model
+        run: |
+          python optimize.py \
+            --input build/BirdNET_GLOBAL_6K_V2.4_Model_FP32.onnx \
+            --output build/BirdNET_GLOBAL_6K_V2.4
+
+      # Verify models before release
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache birda build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            /tmp/birda/target
+          key: ${{ runner.os }}-birda-${{ hashFiles('/tmp/birda/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-birda-
+
+      - name: Build birda
+        run: |
+          git clone https://github.com/tphakala/birda.git /tmp/birda
+          cd /tmp/birda && cargo build --release
+          echo "/tmp/birda/target/release" >> $GITHUB_PATH
+
+      - name: Verify FP32 model
+        run: |
+          birda tests/fixtures/test_audio.wav \
+            --model build/BirdNET_GLOBAL_6K_V2.4_fp32.onnx \
+            --output build/fp32_predictions.csv \
+            --format birdnet \
+            --min-confidence 0.1
+          python tests/compare_predictions.py \
+            tests/fixtures/baseline_predictions.csv \
+            build/fp32_predictions.csv \
+            --tolerance 0.01
+
+      - name: Verify FP16 model
+        run: |
+          birda tests/fixtures/test_audio.wav \
+            --model build/BirdNET_GLOBAL_6K_V2.4_fp16.onnx \
+            --output build/fp16_predictions.csv \
+            --format birdnet \
+            --min-confidence 0.1
+          python tests/compare_predictions.py \
+            tests/fixtures/baseline_predictions.csv \
+            build/fp16_predictions.csv \
+            --tolerance 0.01
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            build/BirdNET_GLOBAL_6K_V2.4_fp32.onnx
+            build/BirdNET_GLOBAL_6K_V2.4_fp16.onnx
+            tests/fixtures/BirdNET_GLOBAL_6K_V2.4_Labels_en_uk.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

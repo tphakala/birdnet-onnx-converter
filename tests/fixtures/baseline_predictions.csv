@@ -1,0 +1,122 @@
+Start (s),End (s),Scientific name,Common name,Confidence,File
+0.0,3.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4591,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+0.0,3.0,Ficedula parva,Red-breasted Flycatcher,0.3549,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+0.0,3.0,Tetrastes bonasia,Hazel Grouse,0.3076,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+6.0,9.0,Tetrastes bonasia,Hazel Grouse,0.5127,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+9.0,12.0,Ficedula parva,Red-breasted Flycatcher,0.3663,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+9.0,12.0,Tetrastes bonasia,Hazel Grouse,0.3304,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+15.0,18.0,Regulus regulus,Goldcrest,0.3822,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+24.0,27.0,Tetrastes bonasia,Hazel Grouse,0.2595,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+27.0,30.0,Tetrastes bonasia,Hazel Grouse,0.4718,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+27.0,30.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3009,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+30.0,33.0,Tetrastes bonasia,Hazel Grouse,0.2981,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+42.0,45.0,Regulus regulus,Goldcrest,0.3589,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+48.0,51.0,Regulus regulus,Goldcrest,0.3164,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+51.0,54.0,Ficedula parva,Red-breasted Flycatcher,0.3115,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+51.0,54.0,Tetrastes bonasia,Hazel Grouse,0.2990,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+54.0,57.0,Strix nebulosa,Great Gray Owl,0.4153,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+54.0,57.0,Accipiter gentilis,Northern Goshawk,0.2670,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+57.0,60.0,Tetrastes bonasia,Hazel Grouse,0.3509,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+60.0,63.0,Tetrastes bonasia,Hazel Grouse,0.4250,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+60.0,63.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3732,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+63.0,66.0,Tetrastes bonasia,Hazel Grouse,0.3980,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+72.0,75.0,Tetrastes bonasia,Hazel Grouse,0.3337,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+75.0,78.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3158,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+81.0,84.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2567,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+87.0,90.0,Strix nebulosa,Great Gray Owl,0.5007,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+87.0,90.0,Tetrastes bonasia,Hazel Grouse,0.3379,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+87.0,90.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2882,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+90.0,93.0,Tetrastes bonasia,Hazel Grouse,0.6416,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+90.0,93.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4381,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+93.0,96.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4315,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+93.0,96.0,Tetrastes bonasia,Hazel Grouse,0.2794,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+93.0,96.0,Ficedula parva,Red-breasted Flycatcher,0.2685,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+96.0,99.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3737,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+108.0,111.0,Ficedula parva,Red-breasted Flycatcher,0.5470,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+111.0,114.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2730,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+114.0,117.0,Tetrastes bonasia,Hazel Grouse,0.4113,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+114.0,117.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3847,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+117.0,120.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4197,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+120.0,123.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3253,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+123.0,126.0,Tetrastes bonasia,Hazel Grouse,0.3728,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+123.0,126.0,Ficedula parva,Red-breasted Flycatcher,0.3622,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+126.0,129.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4194,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+126.0,129.0,Tetrastes bonasia,Hazel Grouse,0.3378,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+129.0,132.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2836,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+132.0,135.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5614,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+135.0,138.0,Tetrastes bonasia,Hazel Grouse,0.2659,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+138.0,141.0,Tetrastes bonasia,Hazel Grouse,0.3264,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+138.0,141.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3258,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+141.0,144.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4113,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+153.0,156.0,Regulus regulus,Goldcrest,0.4286,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+153.0,156.0,Tetrastes bonasia,Hazel Grouse,0.4029,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+156.0,159.0,Tetrastes bonasia,Hazel Grouse,0.2858,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+159.0,162.0,Ficedula parva,Red-breasted Flycatcher,0.2610,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+162.0,165.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4936,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+162.0,165.0,Tetrastes bonasia,Hazel Grouse,0.3353,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+165.0,168.0,Ficedula parva,Red-breasted Flycatcher,0.2630,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+168.0,171.0,Tetrastes bonasia,Hazel Grouse,0.5615,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+168.0,171.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4986,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+171.0,174.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3265,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+174.0,177.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5058,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+174.0,177.0,Ficedula parva,Red-breasted Flycatcher,0.3953,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+174.0,177.0,Phylloscopus sibilatrix,Wood Warbler,0.3710,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+174.0,177.0,Tetrastes bonasia,Hazel Grouse,0.2740,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+177.0,180.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4563,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+177.0,180.0,Tetrastes bonasia,Hazel Grouse,0.4142,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+177.0,180.0,Strix nebulosa,Great Gray Owl,0.3672,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+183.0,186.0,Tetrastes bonasia,Hazel Grouse,0.6871,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+183.0,186.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4884,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+186.0,189.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3830,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+186.0,189.0,Tetrastes bonasia,Hazel Grouse,0.2553,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+189.0,192.0,Tetrastes bonasia,Hazel Grouse,0.3932,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+189.0,192.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2572,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+192.0,195.0,Ficedula parva,Red-breasted Flycatcher,0.3028,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+192.0,195.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2505,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+195.0,198.0,Regulus regulus,Goldcrest,0.2601,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+198.0,201.0,Ficedula parva,Red-breasted Flycatcher,0.4492,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+201.0,204.0,Ficedula parva,Red-breasted Flycatcher,0.3935,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+201.0,204.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3552,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+204.0,207.0,Tetrastes bonasia,Hazel Grouse,0.3892,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+204.0,207.0,Ficedula parva,Red-breasted Flycatcher,0.2981,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+204.0,207.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2676,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+207.0,210.0,Ficedula parva,Red-breasted Flycatcher,0.3318,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+210.0,213.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3046,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+210.0,213.0,Tetrastes bonasia,Hazel Grouse,0.2942,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+216.0,219.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4614,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+216.0,219.0,Ficedula parva,Red-breasted Flycatcher,0.4551,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+216.0,219.0,Tetrastes bonasia,Hazel Grouse,0.3014,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+219.0,222.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3068,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+219.0,222.0,Tetrastes bonasia,Hazel Grouse,0.2754,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+222.0,225.0,Tetrastes bonasia,Hazel Grouse,0.5328,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+225.0,228.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3198,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+228.0,231.0,Ficedula parva,Red-breasted Flycatcher,0.3723,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+231.0,234.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3346,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+231.0,234.0,Tetrastes bonasia,Hazel Grouse,0.3271,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+234.0,237.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3550,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+234.0,237.0,Tetrastes bonasia,Hazel Grouse,0.3011,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+234.0,237.0,Ficedula parva,Red-breasted Flycatcher,0.2737,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+237.0,240.0,Ficedula parva,Red-breasted Flycatcher,0.3030,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+240.0,243.0,Ficedula parva,Red-breasted Flycatcher,0.6335,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+243.0,246.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5464,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+243.0,246.0,Tetrastes bonasia,Hazel Grouse,0.4733,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+249.0,252.0,Ficedula parva,Red-breasted Flycatcher,0.4252,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+249.0,252.0,Tetrastes bonasia,Hazel Grouse,0.3844,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+252.0,255.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5453,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+252.0,255.0,Tetrastes bonasia,Hazel Grouse,0.2657,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+255.0,258.0,Ficedula parva,Red-breasted Flycatcher,0.2653,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+258.0,261.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3348,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+258.0,261.0,Tetrastes bonasia,Hazel Grouse,0.3312,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+261.0,264.0,Ficedula parva,Red-breasted Flycatcher,0.3771,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+267.0,270.0,Ficedula parva,Red-breasted Flycatcher,0.4113,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+270.0,273.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2925,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+270.0,273.0,Tetrastes bonasia,Hazel Grouse,0.2691,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+276.0,279.0,Regulus regulus,Goldcrest,0.3801,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+279.0,282.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2998,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+288.0,291.0,Ficedula parva,Red-breasted Flycatcher,0.3914,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+288.0,291.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2627,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+291.0,294.0,Tetrastes bonasia,Hazel Grouse,0.3411,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+291.0,294.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3201,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+294.0,297.0,Tetrastes bonasia,Hazel Grouse,0.4755,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+297.0,300.0,Tetrastes bonasia,Hazel Grouse,0.6740,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+297.0,300.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3942,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
