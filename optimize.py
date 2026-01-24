@@ -39,11 +39,11 @@ Requirements:
 
 import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-import numpy as np
+from typing import Optional
 
+import numpy as np
 import onnx
-from onnx import helper, numpy_helper, TensorProto
+from onnx import helper, numpy_helper
 
 
 def create_dft_matrix(fft_size: int) -> np.ndarray:
@@ -55,7 +55,7 @@ def create_dft_matrix(fft_size: int) -> np.ndarray:
     return dft_matrix
 
 
-def get_tensor_shape(model: onnx.ModelProto, tensor_name: str) -> Optional[List[int]]:
+def get_tensor_shape(model: onnx.ModelProto, tensor_name: str) -> Optional[list[int]]:
     """Get shape of a tensor from value_info or initializers."""
     for vi in list(model.graph.value_info) + list(model.graph.input) + list(model.graph.output):
         if vi.name == tensor_name:
@@ -82,7 +82,7 @@ def find_node_by_output(model: onnx.ModelProto, output_name: str) -> Optional[on
     return None
 
 
-def find_nodes_by_input(model: onnx.ModelProto, input_name: str) -> List[onnx.NodeProto]:
+def find_nodes_by_input(model: onnx.ModelProto, input_name: str) -> list[onnx.NodeProto]:
     """Find all nodes that consume a given input."""
     return [node for node in model.graph.node if input_name in node.input]
 
@@ -98,11 +98,11 @@ def get_attribute(node: onnx.NodeProto, name: str, default=None):
             elif attr.type == onnx.AttributeProto.FLOAT:
                 return attr.f
             elif attr.type == onnx.AttributeProto.STRING:
-                return attr.s.decode('utf-8')
+                return attr.s.decode("utf-8")
     return default
 
 
-def replace_dft_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def replace_dft_with_matmul(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Replace DFT operations with MatMul using precomputed cosine DFT matrix.
 
     Pattern: Reshape(..., fft_size, 1) -> DFT(onesided=1) -> Slice(real part) -> (..., num_freqs, 1)
@@ -118,18 +118,18 @@ def replace_dft_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, in
     node_to_idx = {id(node): idx for idx, node in enumerate(node_list)}
 
     for node in node_list:
-        if node.op_type != 'DFT':
+        if node.op_type != "DFT":
             continue
 
         dft_input = node.input[0]
         dft_output = node.output[0]
 
-        onesided = get_attribute(node, 'onesided', 0)
+        onesided = get_attribute(node, "onesided", 0)
         if onesided != 1:
             print(f"  Warning: DFT {node.name} is not onesided, skipping")
             continue
 
-        axis = get_attribute(node, 'axis', 1)
+        get_attribute(node, "axis", 1)
 
         fft_size = None
         if len(node.input) > 1:
@@ -137,7 +137,11 @@ def replace_dft_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, in
             for init in model.graph.initializer:
                 if init.name == fft_length_name:
                     fft_length_data = numpy_helper.to_array(init)
-                    fft_size = int(fft_length_data) if fft_length_data.shape == () else int(fft_length_data[-1])
+                    fft_size = (
+                        int(fft_length_data)
+                        if fft_length_data.shape == ()
+                        else int(fft_length_data[-1])
+                    )
                     break
 
         if fft_size is None:
@@ -147,12 +151,14 @@ def replace_dft_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, in
         consumers = find_nodes_by_input(model, dft_output)
         slice_node = None
         for consumer in consumers:
-            if consumer.op_type == 'Slice':
+            if consumer.op_type == "Slice":
                 slice_node = consumer
                 break
 
         if slice_node is None:
-            print(f"  Warning: DFT {node.name} has no Slice consumer for real part extraction, skipping")
+            print(
+                f"  Warning: DFT {node.name} has no Slice consumer for real part extraction, skipping"
+            )
             continue
 
         slice_output = slice_node.output[0]
@@ -171,34 +177,38 @@ def replace_dft_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, in
 
         squeezed_name = f"{node.name}_squeezed"
         squeeze_node_new = helper.make_node(
-            'Squeeze',
+            "Squeeze",
             inputs=[dft_input, squeeze_axes_name],
             outputs=[squeezed_name],
-            name=f"{node.name}_squeeze"
+            name=f"{node.name}_squeeze",
         )
 
         matmul_output = f"{node.name}_matmul_out"
         matmul_node = helper.make_node(
-            'MatMul',
+            "MatMul",
             inputs=[squeezed_name, dft_matrix_name],
             outputs=[matmul_output],
-            name=f"{node.name}_matmul"
+            name=f"{node.name}_matmul",
         )
 
         unsqueeze_axes_name = f"{node.name}_unsqueeze_axes"
-        unsqueeze_axes = numpy_helper.from_array(np.array([-1], dtype=np.int64), unsqueeze_axes_name)
+        unsqueeze_axes = numpy_helper.from_array(
+            np.array([-1], dtype=np.int64), unsqueeze_axes_name
+        )
         initializers_to_add.append(unsqueeze_axes)
 
         unsqueeze_node = helper.make_node(
-            'Unsqueeze',
+            "Unsqueeze",
             inputs=[matmul_output, unsqueeze_axes_name],
             outputs=[slice_output],
-            name=f"{node.name}_unsqueeze"
+            name=f"{node.name}_unsqueeze",
         )
 
         dft_idx = node_to_idx[id(node)]
         slice_idx = node_to_idx[id(slice_node)]
-        replacements_info.append((dft_idx, slice_idx, [squeeze_node_new, matmul_node, unsqueeze_node]))
+        replacements_info.append(
+            (dft_idx, slice_idx, [squeeze_node_new, matmul_node, unsqueeze_node])
+        )
         replacements += 1
 
     nodes_to_remove_idx = set()
@@ -209,7 +219,7 @@ def replace_dft_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, in
     new_nodes = []
     for idx, node in enumerate(node_list):
         if idx in nodes_to_remove_idx:
-            for dft_idx, slice_idx, replacement_nodes in replacements_info:
+            for dft_idx, _slice_idx, replacement_nodes in replacements_info:
                 if idx == dft_idx:
                     new_nodes.extend(replacement_nodes)
                     break
@@ -225,7 +235,7 @@ def replace_dft_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, in
     return model, replacements
 
 
-def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Replace RFFT2D operations with MatMul using precomputed DFT matrix.
 
     Handles the pattern from tf2onnx TFLite conversion:
@@ -244,7 +254,7 @@ def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto,
     node_to_idx = {id(node): idx for idx, node in enumerate(node_list)}
 
     for node in node_list:
-        if node.op_type != 'RFFT2D':
+        if node.op_type != "RFFT2D":
             continue
 
         rfft_input = node.input[0]
@@ -269,7 +279,7 @@ def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto,
         consumers = find_nodes_by_input(model, rfft_output)
         squeeze_node = None
         for consumer in consumers:
-            if consumer.op_type == 'Squeeze':
+            if consumer.op_type == "Squeeze":
                 squeeze_node = consumer
                 break
 
@@ -281,7 +291,7 @@ def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto,
         num_freqs = fft_size // 2 + 1
 
         producer = find_node_by_output(model, rfft_input)
-        if producer is None or producer.op_type != 'Unsqueeze':
+        if producer is None or producer.op_type != "Unsqueeze":
             print(f"  Warning: RFFT2D {node.name} producer is not Unsqueeze, skipping")
             continue
 
@@ -295,10 +305,10 @@ def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto,
         initializers_to_add.append(dft_init)
 
         matmul_node = helper.make_node(
-            'MatMul',
+            "MatMul",
             inputs=[unsqueeze_input, dft_matrix_name],
             outputs=[squeeze_output],
-            name=f"{node.name}_matmul"
+            name=f"{node.name}_matmul",
         )
 
         producer_idx = node_to_idx[id(producer)]
@@ -316,7 +326,7 @@ def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto,
     new_nodes = []
     for idx, node in enumerate(node_list):
         if idx in nodes_to_remove_idx:
-            for producer_idx, rfft_idx, squeeze_idx, replacement_nodes in replacements_info:
+            for _producer_idx, rfft_idx, _squeeze_idx, replacement_nodes in replacements_info:
                 if idx == rfft_idx:
                     new_nodes.extend(replacement_nodes)
                     break
@@ -332,7 +342,7 @@ def replace_rfft2d_with_matmul(model: onnx.ModelProto) -> Tuple[onnx.ModelProto,
     return model, replacements
 
 
-def replace_reverse_sequence(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def replace_reverse_sequence(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Replace ReverseSequence with negative-stride Slice."""
     replacements = 0
     replacements_info = []
@@ -342,7 +352,7 @@ def replace_reverse_sequence(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, i
     node_to_idx = {id(node): idx for idx, node in enumerate(node_list)}
 
     for node in node_list:
-        if node.op_type != 'ReverseSequence':
+        if node.op_type != "ReverseSequence":
             continue
 
         rev_input = node.input[0]
@@ -350,7 +360,7 @@ def replace_reverse_sequence(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, i
 
         time_axis = 0
         for attr in node.attribute:
-            if attr.name == 'time_axis':
+            if attr.name == "time_axis":
                 time_axis = attr.i
 
         print(f"  Replacing ReverseSequence {node.name} (time_axis={time_axis})")
@@ -365,18 +375,20 @@ def replace_reverse_sequence(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, i
         axes = np.array([time_axis], dtype=np.int64)
         steps = np.array([-1], dtype=np.int64)
 
-        initializers_to_add.extend([
-            numpy_helper.from_array(starts, starts_name),
-            numpy_helper.from_array(ends, ends_name),
-            numpy_helper.from_array(axes, axes_name),
-            numpy_helper.from_array(steps, steps_name),
-        ])
+        initializers_to_add.extend(
+            [
+                numpy_helper.from_array(starts, starts_name),
+                numpy_helper.from_array(ends, ends_name),
+                numpy_helper.from_array(axes, axes_name),
+                numpy_helper.from_array(steps, steps_name),
+            ]
+        )
 
         slice_node_new = helper.make_node(
-            'Slice',
+            "Slice",
             inputs=[rev_input, starts_name, ends_name, axes_name, steps_name],
             outputs=[rev_output],
-            name=f"{node.name}_slice"
+            name=f"{node.name}_slice",
         )
 
         node_idx = node_to_idx[id(node)]
@@ -404,7 +416,9 @@ def replace_reverse_sequence(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, i
     return model, replacements
 
 
-def replace_globalavgpool_squeeze_with_reducemean(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def replace_globalavgpool_squeeze_with_reducemean(
+    model: onnx.ModelProto,
+) -> tuple[onnx.ModelProto, int]:
     """Replace GlobalAveragePool -> Squeeze pattern with ReduceMean.
 
     GlobalAveragePool outputs shape [..., 1, 1] which then gets Squeezed.
@@ -417,20 +431,20 @@ def replace_globalavgpool_squeeze_with_reducemean(model: onnx.ModelProto) -> Tup
     node_to_idx = {id(node): idx for idx, node in enumerate(node_list)}
 
     for node in node_list:
-        if node.op_type != 'GlobalAveragePool':
+        if node.op_type != "GlobalAveragePool":
             continue
 
         gap_output = node.output[0]
         consumers = find_nodes_by_input(model, gap_output)
 
-        if len(consumers) != 1 or consumers[0].op_type != 'Squeeze':
+        if len(consumers) != 1 or consumers[0].op_type != "Squeeze":
             continue
 
         squeeze_node = consumers[0]
         gap_input = node.input[0]
         squeeze_output = squeeze_node.output[0]
 
-        squeeze_axes = get_attribute(squeeze_node, 'axes', None)
+        squeeze_axes = get_attribute(squeeze_node, "axes", None)
         if squeeze_axes is None and len(squeeze_node.input) > 1:
             for init in model.graph.initializer:
                 if init.name == squeeze_node.input[1]:
@@ -439,15 +453,17 @@ def replace_globalavgpool_squeeze_with_reducemean(model: onnx.ModelProto) -> Tup
 
         reduce_axes = squeeze_axes if squeeze_axes else [2, 3]
 
-        print(f"  Replacing GlobalAveragePool+Squeeze {node.name} with ReduceMean (axes={reduce_axes})")
+        print(
+            f"  Replacing GlobalAveragePool+Squeeze {node.name} with ReduceMean (axes={reduce_axes})"
+        )
 
         reducemean_node = helper.make_node(
-            'ReduceMean',
+            "ReduceMean",
             inputs=[gap_input],
             outputs=[squeeze_output],
             name=f"{node.name}_reducemean",
             axes=reduce_axes,
-            keepdims=0
+            keepdims=0,
         )
 
         gap_idx = node_to_idx[id(node)]
@@ -463,7 +479,7 @@ def replace_globalavgpool_squeeze_with_reducemean(model: onnx.ModelProto) -> Tup
     new_nodes = []
     for idx, node in enumerate(node_list):
         if idx in nodes_to_remove_idx:
-            for gap_idx, squeeze_idx, replacement_nodes in replacements_info:
+            for gap_idx, _squeeze_idx, replacement_nodes in replacements_info:
                 if idx == gap_idx:
                     new_nodes.extend(replacement_nodes)
                     break
@@ -476,7 +492,7 @@ def replace_globalavgpool_squeeze_with_reducemean(model: onnx.ModelProto) -> Tup
     return model, replacements
 
 
-def remove_identity_casts(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def remove_identity_casts(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Remove Cast operations that don't change the data type."""
     nodes_to_remove = []
     replacements = 0
@@ -490,10 +506,10 @@ def remove_identity_casts(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]
         tensor_types[vi.name] = vi.type.tensor_type.elem_type
 
     for node in model.graph.node:
-        if node.op_type != 'Cast':
+        if node.op_type != "Cast":
             continue
 
-        to_type = get_attribute(node, 'to', None)
+        to_type = get_attribute(node, "to", None)
         if to_type is None:
             continue
 
@@ -504,7 +520,9 @@ def remove_identity_casts(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]
             print(f"  Removing identity Cast {node.name}")
             cast_output = node.output[0]
             for other_node in model.graph.node:
-                other_node.input[:] = [input_name if x == cast_output else x for x in other_node.input]
+                other_node.input[:] = [
+                    input_name if x == cast_output else x for x in other_node.input
+                ]
             nodes_to_remove.append(node)
             replacements += 1
 
@@ -515,17 +533,17 @@ def remove_identity_casts(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]
     return model, replacements
 
 
-def remove_redundant_reshapes(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def remove_redundant_reshapes(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Remove consecutive Reshape operations that can be merged."""
     nodes_to_remove = []
     replacements = 0
 
     for node in model.graph.node:
-        if node.op_type != 'Reshape':
+        if node.op_type != "Reshape":
             continue
 
         producer = find_node_by_output(model, node.input[0])
-        if producer is None or producer.op_type != 'Reshape':
+        if producer is None or producer.op_type != "Reshape":
             continue
 
         consumers = find_nodes_by_input(model, producer.output[0])
@@ -545,25 +563,25 @@ def remove_redundant_reshapes(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, 
     return model, replacements
 
 
-def fuse_transpose_patterns(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def fuse_transpose_patterns(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Remove or fuse consecutive Transpose operations."""
     nodes_to_remove = []
     replacements = 0
 
     for node in model.graph.node:
-        if node.op_type != 'Transpose':
+        if node.op_type != "Transpose":
             continue
 
         producer = find_node_by_output(model, node.input[0])
-        if producer is None or producer.op_type != 'Transpose':
+        if producer is None or producer.op_type != "Transpose":
             continue
 
         consumers = find_nodes_by_input(model, producer.output[0])
         if len(consumers) != 1:
             continue
 
-        perm1 = get_attribute(producer, 'perm', None)
-        perm2 = get_attribute(node, 'perm', None)
+        perm1 = get_attribute(producer, "perm", None)
+        perm2 = get_attribute(node, "perm", None)
 
         if perm1 is None or perm2 is None:
             continue
@@ -575,14 +593,16 @@ def fuse_transpose_patterns(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, in
             transpose_output = node.output[0]
             original_input = producer.input[0]
             for other_node in model.graph.node:
-                other_node.input[:] = [original_input if x == transpose_output else x for x in other_node.input]
+                other_node.input[:] = [
+                    original_input if x == transpose_output else x for x in other_node.input
+                ]
             nodes_to_remove.extend([producer, node])
             replacements += 1
         else:
             print(f"  Fusing Transposes: {producer.name} + {node.name} -> perm={composed_perm}")
             node.input[0] = producer.input[0]
             for attr in node.attribute:
-                if attr.name == 'perm':
+                if attr.name == "perm":
                     del attr.ints[:]
                     attr.ints.extend(composed_perm)
             nodes_to_remove.append(producer)
@@ -599,18 +619,18 @@ def set_dynamic_batch(model: onnx.ModelProto) -> onnx.ModelProto:
     """Enable dynamic batch size."""
     for inp in model.graph.input:
         if inp.type.tensor_type.shape.dim:
-            inp.type.tensor_type.shape.dim[0].ClearField('dim_value')
+            inp.type.tensor_type.shape.dim[0].ClearField("dim_value")
             inp.type.tensor_type.shape.dim[0].dim_param = "batch"
 
     for out in model.graph.output:
         if out.type.tensor_type.shape.dim:
-            out.type.tensor_type.shape.dim[0].ClearField('dim_value')
+            out.type.tensor_type.shape.dim[0].ClearField("dim_value")
             out.type.tensor_type.shape.dim[0].dim_param = "batch"
 
     return model
 
 
-def convert_int32_to_int64(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def convert_int32_to_int64(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Convert INT32 initializers to INT64 for better compatibility.
 
     Uses onnx_ir for proper type propagation throughout the graph.
@@ -636,8 +656,10 @@ def convert_int32_to_int64(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int
     # This is critical - Cast nodes force specific types and prevent INT64 propagation
     class RemoveCast(rewriter.RewriteRuleClassBase):
         """Replace Cast with Identity to let optimizer handle types."""
+
         def pattern(self, op, x):
             return op.Cast(x)
+
         def rewrite(self, op, x: ir.Value, **kwargs):
             return op.Identity(x)
 
@@ -672,11 +694,9 @@ def convert_int32_to_int64(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int
     if converted > 0:
         try:
             onnxscript.optimizer.optimize(
-                ir_model,
-                input_size_limit=1024 * 1024 * 1024,
-                output_size_limit=1024 * 1024 * 1024
+                ir_model, input_size_limit=1024 * 1024 * 1024, output_size_limit=1024 * 1024 * 1024
             )
-            print(f"  Type inference updated via onnxscript optimizer")
+            print("  Type inference updated via onnxscript optimizer")
         except Exception as e:
             print(f"  Warning: onnxscript optimizer failed during INT32->INT64: {e}")
 
@@ -709,6 +729,7 @@ def optimize_with_simplifier(model: onnx.ModelProto) -> onnx.ModelProto:
     """Run onnx-simplifier for constant folding and optimization."""
     try:
         from onnxsim import simplify
+
         model_simplified, check = simplify(model)
         if check:
             print("  onnx-simplifier succeeded")
@@ -724,6 +745,7 @@ def optimize_with_onnxslim(model: onnx.ModelProto) -> onnx.ModelProto:
     """Run onnxslim optimization."""
     try:
         import onnxslim
+
         model = onnxslim.slim(model)
         print("  onnxslim succeeded")
     except Exception as e:
@@ -742,24 +764,25 @@ def optimize_with_onnxscript(model: onnx.ModelProto, remove_casts: bool = True) 
         ir_model = ir.from_proto(model)
 
         if remove_casts:
+
             class RemoveCast(rewriter.RewriteRuleClassBase):
                 """Replace Cast with Identity to let optimizer handle types."""
+
                 def pattern(self, op, x):
                     return op.Cast(x)
+
                 def rewrite(self, op, x: ir.Value, **kwargs):
                     return op.Identity(x)
 
             try:
                 rule_set = pattern.RewriteRuleSet([RemoveCast.rule()])
                 rewriter.rewrite(ir_model, rule_set)
-                print(f"  RemoveCast rule applied")
+                print("  RemoveCast rule applied")
             except Exception as e:
                 print(f"  RemoveCast rule failed: {e}")
 
         onnxscript.optimizer.optimize(
-            ir_model,
-            input_size_limit=1024 * 1024 * 1024,
-            output_size_limit=1024 * 1024 * 1024
+            ir_model, input_size_limit=1024 * 1024 * 1024, output_size_limit=1024 * 1024 * 1024
         )
         model = ir.to_proto(ir_model)
         print("  onnxscript optimizer succeeded")
@@ -768,7 +791,7 @@ def optimize_with_onnxscript(model: onnx.ModelProto, remove_casts: bool = True) 
     return model
 
 
-def remove_dead_code(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def remove_dead_code(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Remove nodes whose outputs are not consumed by any other node or graph output.
 
     Iteratively removes dead nodes until no more can be removed, handling
@@ -822,7 +845,7 @@ def remove_dead_code(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
     return model, total_removed
 
 
-def fix_split_nodes(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
+def fix_split_nodes(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Fix Split nodes with zero-size outputs.
 
     When a Split node has a split tensor with zero values (e.g., [1, 1, 0]),
@@ -837,7 +860,7 @@ def fix_split_nodes(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
     initializers = {init.name: init for init in model.graph.initializer}
 
     for node in model.graph.node:
-        if node.op_type != 'Split':
+        if node.op_type != "Split":
             continue
 
         # Check if this Split has a split sizes input (opset 13+)
@@ -863,7 +886,7 @@ def fix_split_nodes(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
         # Remove zero-size outputs from the node
         outputs_to_keep = []
         new_split_sizes = []
-        for i, (out, size) in enumerate(zip(node.output, split_sizes)):
+        for _i, (out, size) in enumerate(zip(node.output, split_sizes)):
             if size > 0:
                 outputs_to_keep.append(out)
                 new_split_sizes.append(size)
@@ -889,30 +912,24 @@ def fix_split_nodes(model: onnx.ModelProto) -> Tuple[onnx.ModelProto, int]:
     return model, fixes
 
 
-def count_ops(model: onnx.ModelProto) -> Dict[str, int]:
+def count_ops(model: onnx.ModelProto) -> dict[str, int]:
     """Count operations in a model."""
     from collections import Counter
+
     return dict(Counter(node.op_type for node in model.graph.node))
 
 
 def convert_to_fp16(model: onnx.ModelProto) -> onnx.ModelProto:
     """Convert FP32 model to FP16 for devices with FP16 hardware support.
 
-    Uses onnxconverter-common for reliable FP16 conversion while keeping
-    certain ops in FP32 for numerical stability.
+    Uses onnxconverter-common for reliable FP16 conversion.
+    Note: op_block_list removed as it causes type mismatch issues.
     """
     try:
         from onnxconverter_common import float16
 
-        op_block_list = [
-            'Softmax',
-            'ReduceMean',
-            'LayerNormalization',
-        ]
-
         model_fp16 = float16.convert_float_to_float16(
             model,
-            op_block_list=op_block_list,
             keep_io_types=True,
         )
         print("  FP16 conversion succeeded")
@@ -921,6 +938,7 @@ def convert_to_fp16(model: onnx.ModelProto) -> onnx.ModelProto:
         print("  Warning: onnxconverter-common not installed, trying onnxruntime")
         try:
             from onnxruntime.transformers import float16
+
             model_fp16 = float16.convert_float_to_float16(model, keep_io_types=True)
             print("  FP16 conversion succeeded (via onnxruntime)")
             return model_fp16
@@ -939,13 +957,13 @@ def quantize_to_int8_dynamic(model_path: str, output_path: str) -> bool:
     in INT8 at runtime. Uses QUInt8 weights for better ARM support.
     """
     try:
-        from onnxruntime.quantization import quantize_dynamic, QuantType
+        from onnxruntime.quantization import QuantType, quantize_dynamic
 
         quantize_dynamic(
             model_path,
             output_path,
             weight_type=QuantType.QUInt8,
-            extra_options={'ActivationSymmetric': False},
+            extra_options={"ActivationSymmetric": False},
         )
         print("  INT8 dynamic quantization succeeded")
         return True
@@ -961,14 +979,14 @@ def quantize_to_int8_arm(model_path: str, output_path: str) -> bool:
     which are not supported on ARM ONNX Runtime builds.
     """
     try:
-        from onnxruntime.quantization import quantize_dynamic, QuantType
+        from onnxruntime.quantization import QuantType, quantize_dynamic
 
         quantize_dynamic(
             model_path,
             output_path,
             weight_type=QuantType.QUInt8,
-            op_types_to_quantize=['MatMul'],
-            extra_options={'ActivationSymmetric': False},
+            op_types_to_quantize=["MatMul"],
+            extra_options={"ActivationSymmetric": False},
         )
         print("  INT8 ARM quantization succeeded (MatMul only)")
         return True
@@ -1063,14 +1081,20 @@ def optimize_model(input_path: str) -> Optional[onnx.ModelProto]:
 
     # Final stats
     final_ops = count_ops(model)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"{'OPTIMIZATION RESULTS':^60}")
-    print(f"{'='*60}")
-    print(f"  Total ops: {sum(initial_ops.values())} -> {sum(final_ops.values())} ({sum(final_ops.values()) - sum(initial_ops.values()):+d})")
+    print(f"{'=' * 60}")
+    print(
+        f"  Total ops: {sum(initial_ops.values())} -> {sum(final_ops.values())} ({sum(final_ops.values()) - sum(initial_ops.values()):+d})"
+    )
     print(f"  DFT: {initial_ops.get('DFT', 0)} -> {final_ops.get('DFT', 0)}")
     print(f"  RFFT2D: {initial_ops.get('RFFT2D', 0)} -> {final_ops.get('RFFT2D', 0)}")
-    print(f"  ReverseSequence: {initial_ops.get('ReverseSequence', 0)} -> {final_ops.get('ReverseSequence', 0)}")
-    print(f"  GlobalAveragePool: {initial_ops.get('GlobalAveragePool', 0)} -> {final_ops.get('GlobalAveragePool', 0)}")
+    print(
+        f"  ReverseSequence: {initial_ops.get('ReverseSequence', 0)} -> {final_ops.get('ReverseSequence', 0)}"
+    )
+    print(
+        f"  GlobalAveragePool: {initial_ops.get('GlobalAveragePool', 0)} -> {final_ops.get('GlobalAveragePool', 0)}"
+    )
     print(f"  Squeeze: {initial_ops.get('Squeeze', 0)} -> {final_ops.get('Squeeze', 0)}")
     print(f"  Cast: {initial_ops.get('Cast', 0)} -> {final_ops.get('Cast', 0)}")
     print(f"  Transpose: {initial_ops.get('Transpose', 0)} -> {final_ops.get('Transpose', 0)}")
@@ -1093,16 +1117,20 @@ def main():
         description="Optimize BirdNET ONNX model for GPU and embedded devices"
     )
     parser.add_argument("--input", "-i", required=True, help="Input ONNX model")
-    parser.add_argument("--output", "-o", required=True, help="Output base path (without extension)")
+    parser.add_argument(
+        "--output", "-o", required=True, help="Output base path (without extension)"
+    )
     parser.add_argument("--fp32-only", action="store_true", help="Only output FP32 model")
     parser.add_argument("--no-fp16", action="store_true", help="Skip FP16 conversion")
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantization")
-    parser.add_argument("--int8-arm", action="store_true", help="Also create ARM-compatible INT8 model")
+    parser.add_argument(
+        "--int8-arm", action="store_true", help="Also create ARM-compatible INT8 model"
+    )
     args = parser.parse_args()
 
     # Determine output paths
     output_base = args.output
-    if output_base.endswith('.onnx'):
+    if output_base.endswith(".onnx"):
         output_base = output_base[:-5]
 
     fp32_path = f"{output_base}_fp32.onnx"
@@ -1119,9 +1147,9 @@ def main():
     input_size = Path(args.input).stat().st_size / (1024 * 1024)
 
     # Save FP32 model
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"{'SAVING MODELS':^60}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     print(f"\n[FP32] Saving: {fp32_path}")
     onnx.save(model, fp32_path)
@@ -1129,16 +1157,16 @@ def main():
     print(f"  Size: {fp32_size:.2f} MB")
 
     if args.fp32_only:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"{'SUMMARY':^60}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  Input:  {input_size:.2f} MB")
         print(f"  FP32:   {fp32_size:.2f} MB  ({fp32_path})")
         return 0
 
     # Convert to FP16
     if not args.no_fp16:
-        print(f"\n[FP16] Converting to FP16...")
+        print("\n[FP16] Converting to FP16...")
         model_fp16 = convert_to_fp16(model)
         if model_fp16 is not None:
             print(f"[FP16] Saving: {fp16_path}")
@@ -1154,7 +1182,7 @@ def main():
 
     # Quantize to INT8
     if not args.no_int8:
-        print(f"\n[INT8] Quantizing to INT8...")
+        print("\n[INT8] Quantizing to INT8...")
         success = quantize_to_int8_dynamic(fp32_path, int8_path)
         if success:
             int8_size = Path(int8_path).stat().st_size / (1024 * 1024)
@@ -1169,18 +1197,20 @@ def main():
     # Quantize to INT8 ARM
     int8_arm_size = None
     if args.int8_arm:
-        print(f"\n[INT8-ARM] Quantizing to INT8 (ARM compatible)...")
+        print("\n[INT8-ARM] Quantizing to INT8 (ARM compatible)...")
         success = quantize_to_int8_arm(fp32_path, int8_arm_path)
         if success:
             int8_arm_size = Path(int8_arm_path).stat().st_size / (1024 * 1024)
-            print(f"  Size: {int8_arm_size:.2f} MB ({100 * int8_arm_size / fp32_size:.1f}% of FP32)")
+            print(
+                f"  Size: {int8_arm_size:.2f} MB ({100 * int8_arm_size / fp32_size:.1f}% of FP32)"
+            )
         else:
             print("  INT8 ARM quantization skipped")
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"{'SUMMARY':^60}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Input:  {input_size:.2f} MB")
     print(f"  FP32:   {fp32_size:.2f} MB  ({fp32_path})")
     if fp16_size is not None:
@@ -1190,9 +1220,9 @@ def main():
     if int8_arm_size is not None:
         print(f"  INT8-ARM: {int8_arm_size:.2f} MB  ({int8_arm_path})")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"{'RECOMMENDED USAGE':^60}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print("  GPU (CUDA/TensorRT):  Use FP32 or FP16")
     print("  RPi 5 (FP16 support): Use FP16 for ~2x speedup")
     print("  RPi 3/4 (no FP16):    Use INT8-ARM for best performance")

@@ -14,7 +14,6 @@ Requirements:
 
 import argparse
 import json
-import os
 import tempfile
 import zipfile
 from pathlib import Path
@@ -25,8 +24,8 @@ def load_keras_model_manual(keras_path: str):
     Load a .keras model by manually extracting and rebuilding it.
     This handles version incompatibility issues between Keras versions.
     """
-    import tensorflow as tf
     import h5py
+    import tensorflow as tf
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Extract the .keras archive
@@ -35,7 +34,7 @@ def load_keras_model_manual(keras_path: str):
 
         # Load config
         config_path = Path(tmpdir) / "config.json"
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         # Parse architecture from config
@@ -107,13 +106,11 @@ def convert_to_tflite(model, output_path: str, optimize: bool = True) -> str:
 
 def convert_to_onnx(model, output_path: str, opset: int = 13) -> str:
     """Convert Keras model to ONNX format."""
-    import tf2onnx
     import tensorflow as tf
+    import tf2onnx
 
     # Get input spec from model
-    input_signature = [
-        tf.TensorSpec(model.input_shape, tf.float32, name="input")
-    ]
+    input_signature = [tf.TensorSpec(model.input_shape, tf.float32, name="input")]
 
     # Convert to ONNX
     onnx_model, _ = tf2onnx.convert.from_keras(
@@ -132,16 +129,21 @@ def convert_tflite_to_onnx(tflite_path: str, output_path: str, opset: int = 17) 
     import sys
 
     cmd = [
-        sys.executable, "-m", "tf2onnx.convert",
-        "--tflite", tflite_path,
-        "--output", output_path,
-        "--opset", str(opset),
+        sys.executable,
+        "-m",
+        "tf2onnx.convert",
+        "--tflite",
+        tflite_path,
+        "--output",
+        output_path,
+        "--opset",
+        str(opset),
         "--continue_on_error",  # Handle numpy 2.0 compatibility
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"  Warning: tf2onnx returned non-zero exit code")
+        print("  Warning: tf2onnx returned non-zero exit code")
         print(f"  stderr: {result.stderr}")
 
     return output_path
@@ -149,8 +151,8 @@ def convert_tflite_to_onnx(tflite_path: str, output_path: str, opset: int = 17) 
 
 def verify_tflite(tflite_path: str, input_shape: tuple) -> bool:
     """Verify TFLite model loads and runs."""
-    import tensorflow as tf
     import numpy as np
+    import tensorflow as tf
 
     try:
         interpreter = tf.lite.Interpreter(model_path=tflite_path)
@@ -175,8 +177,8 @@ def verify_tflite(tflite_path: str, input_shape: tuple) -> bool:
 
 def verify_onnx(onnx_path: str, input_shape: tuple) -> bool:
     """Verify ONNX model loads and is valid."""
-    import onnx
     import numpy as np
+    import onnx
 
     try:
         model = onnx.load(onnx_path)
@@ -281,11 +283,12 @@ def main():
     print(f"Loading Keras model: {input_path}")
     try:
         model = load_keras_model_manual(str(input_path))
-        print(f"  Model loaded successfully (manual extraction)")
+        print("  Model loaded successfully (manual extraction)")
     except Exception as e:
         print(f"  Manual loading failed: {e}")
         print("  Trying standard tf.keras.models.load_model...")
         import tensorflow as tf
+
         model = tf.keras.models.load_model(input_path)
 
     print(f"  Input shape: {model.input_shape}")
