@@ -49,7 +49,8 @@ jobs:
     needs: [lint, typecheck]
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        # Python 3.12 excluded: tf2onnx requires numpy<1.24 which has no 3.12 wheels
+        python-version: ["3.11"]
 
     steps:
       - uses: actions/checkout@v4
