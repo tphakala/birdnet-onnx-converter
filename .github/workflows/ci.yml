@@ -49,8 +49,7 @@ jobs:
     needs: [lint, typecheck]
     strategy:
       matrix:
-        # Python 3.11 used; 3.12+ support depends on tensorflow compatibility
-        python-version: ["3.11"]
+        python-version: ["3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
