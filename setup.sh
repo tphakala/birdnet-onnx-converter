@@ -57,10 +57,10 @@ pip install --upgrade pip --quiet
 
 echo
 echo "Installing core dependencies..."
-pip install onnx onnxslim onnxscript numpy onnxruntime onnxconverter-common --quiet
+pip install -r "$SCRIPT_DIR/requirements.txt" --quiet
 
 echo "Installing TFLite conversion dependencies..."
-pip install tensorflow tf2onnx --quiet
+pip install -r "$SCRIPT_DIR/requirements-tflite.txt" --quiet
 
 # Optional: onnx-simplifier (may fail on some systems)
 echo "Attempting to install onnx-simplifier (optional)..."

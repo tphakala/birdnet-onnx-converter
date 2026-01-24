@@ -3,4 +3,5 @@
 # See: https://github.com/onnx/tensorflow-onnx/issues/2373
 
 tensorflow>=2.14,<2.19
-tf2onnx @ git+https://github.com/onnx/tensorflow-onnx.git@main
+# Pin to commit with NumPy 2.0 fix (PR #2392) until new release
+tf2onnx @ git+https://github.com/onnx/tensorflow-onnx.git@075a3a71345991823556c5297127027552940251
