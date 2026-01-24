@@ -31,10 +31,10 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 # Core dependencies
-pip install onnx onnxslim onnxscript numpy onnxruntime onnxconverter-common
+pip install -r requirements.txt
 
-# For TFLite conversion
-pip install tensorflow tf2onnx
+# For TFLite conversion (optional)
+pip install -r requirements-tflite.txt
 
 # Optional: onnx-simplifier (requires cmake)
 pip install onnx-simplifier
