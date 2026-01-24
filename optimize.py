@@ -129,7 +129,10 @@ def replace_dft_with_matmul(model: onnx.ModelProto) -> tuple[onnx.ModelProto, in
             print(f"  Warning: DFT {node.name} is not onesided, skipping")
             continue
 
-        get_attribute(node, "axis", 1)
+        axis = get_attribute(node, "axis", 1)
+        if axis != 1:
+            print(f"  Warning: DFT {node.name} has unsupported axis {axis}, skipping")
+            continue
 
         fft_size = None
         if len(node.input) > 1:
