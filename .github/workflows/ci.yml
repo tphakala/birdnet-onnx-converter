@@ -105,11 +105,13 @@ jobs:
 
       - name: Run birda inference on FP32 model
         run: |
+          mkdir -p tests/output/fp32
           birda tests/fixtures/test_audio.wav \
             --model tests/output/BirdNET_fp32.onnx \
-            --output tests/output/fp32_predictions.csv \
+            --output-dir tests/output/fp32 \
             --format birdnet \
             --min-confidence 0.1
+          mv tests/output/fp32/*.csv tests/output/fp32_predictions.csv
 
       - name: Compare FP32 predictions against baseline
         run: |
@@ -121,11 +123,13 @@ jobs:
 
       - name: Run birda inference on FP16 model
         run: |
+          mkdir -p tests/output/fp16
           birda tests/fixtures/test_audio.wav \
             --model tests/output/BirdNET_fp16.onnx \
-            --output tests/output/fp16_predictions.csv \
+            --output-dir tests/output/fp16 \
             --format birdnet \
             --min-confidence 0.1
+          mv tests/output/fp16/*.csv tests/output/fp16_predictions.csv
 
       - name: Compare FP16 predictions against baseline
         run: |

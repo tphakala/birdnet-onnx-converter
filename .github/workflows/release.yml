@@ -64,11 +64,13 @@ jobs:
 
       - name: Verify FP32 model
         run: |
+          mkdir -p build/fp32
           birda tests/fixtures/test_audio.wav \
             --model build/BirdNET_GLOBAL_6K_V2.4_fp32.onnx \
-            --output build/fp32_predictions.csv \
+            --output-dir build/fp32 \
             --format birdnet \
             --min-confidence 0.1
+          mv build/fp32/*.csv build/fp32_predictions.csv
           python tests/compare_predictions.py \
             tests/fixtures/baseline_predictions.csv \
             build/fp32_predictions.csv \
@@ -76,11 +78,13 @@ jobs:
 
       - name: Verify FP16 model
         run: |
+          mkdir -p build/fp16
           birda tests/fixtures/test_audio.wav \
             --model build/BirdNET_GLOBAL_6K_V2.4_fp16.onnx \
-            --output build/fp16_predictions.csv \
+            --output-dir build/fp16 \
             --format birdnet \
             --min-confidence 0.1
+          mv build/fp16/*.csv build/fp16_predictions.csv
           python tests/compare_predictions.py \
             tests/fixtures/baseline_predictions.csv \
             build/fp16_predictions.csv \
