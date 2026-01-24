@@ -37,11 +37,24 @@ def test_optimization_removes_dft(converted_onnx_path: Path):
 
 
 def test_optimization_removes_casts(converted_onnx_path: Path):
-    """Verify Cast operations are removed."""
+    """Verify Cast operations are removed (requires onnx_ir)."""
+    import pytest
+
     from optimize import count_ops, optimize_model
+
+    # Check if onnx_ir is available (needed for INT32->INT64 conversion)
+    try:
+        import onnx_ir  # noqa: F401
+
+        onnx_ir_available = True
+    except (ImportError, AttributeError):
+        onnx_ir_available = False
 
     optimized = optimize_model(str(converted_onnx_path))
     final_casts = count_ops(optimized).get("Cast", 0)
+
+    if not onnx_ir_available:
+        pytest.skip("onnx_ir not available - Cast removal requires INT32->INT64 conversion")
 
     assert final_casts == 0, f"All Cast ops should be removed, found {final_casts}"
 
