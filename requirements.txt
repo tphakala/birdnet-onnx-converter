@@ -4,8 +4,9 @@ numpy>=1.21.0
 onnxruntime>=1.16.0
 
 # Optimization tools
-onnx-simplifier>=0.4.0
 onnxslim>=0.1.0
+# onnx-simplifier requires cmake and has limited Python version support
+# Install separately: pip install onnx-simplifier
 
 # FP16 conversion
 onnxconverter-common>=1.13.0
