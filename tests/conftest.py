@@ -83,6 +83,7 @@ def optimized_fp32_path(converted_onnx_path: Path, output_dir: Path) -> Path:
     output_path = output_dir / "BirdNET_fp32.onnx"
     if not output_path.exists():
         optimized = optimize_model(str(converted_onnx_path))
+        assert optimized is not None, "Model optimization failed"
         onnx.save(optimized, str(output_path))
     return output_path
 
