@@ -147,8 +147,9 @@ def convert_tflite_to_onnx(tflite_path: str, output_path: str, opset: int = 17) 
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print("  Warning: tf2onnx returned non-zero exit code")
-        print(f"  stderr: {result.stderr}")
+        raise RuntimeError(
+            f"tf2onnx conversion failed with exit code {result.returncode}:\n{result.stderr}"
+        )
 
     return output_path
 
