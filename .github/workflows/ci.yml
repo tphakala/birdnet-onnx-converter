@@ -64,14 +64,22 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Pin numpy<2.0 FIRST for tf2onnx compatibility (uses deprecated np.bool)
-          pip install "numpy<2.0"
+          # Use venv to isolate from container's pre-installed packages
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          # Pin tensorflow 2.14 + numpy<1.24 for tf2onnx compatibility (np.bool removed in 1.24)
+          pip install "numpy>=1.21,<1.24"
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-          pip install tensorflow tf2onnx
+          pip install "tensorflow>=2.14,<2.15" tf2onnx
+          # Reinstall numpy<1.24 to override any dependency upgrades
+          pip install "numpy>=1.21,<1.24"
 
       - name: Run pytest
-        run: pytest tests/ -v
+        run: |
+          source .venv/bin/activate
+          pytest tests/ -v
 
       # Birda inference comparison (build from source until action is available)
       - name: Install Rust
