@@ -1,0 +1,6 @@
+# TFLite to ONNX conversion dependencies (optional)
+# Requires tf2onnx from GitHub main for NumPy 2.0 compatibility
+# See: https://github.com/onnx/tensorflow-onnx/issues/2373
+
+tensorflow>=2.14,<2.19
+tf2onnx @ git+https://github.com/onnx/tensorflow-onnx.git@main
