@@ -64,10 +64,11 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Pin numpy<2.0 FIRST for tf2onnx compatibility (uses deprecated np.bool)
+          pip install "numpy<2.0"
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-          # Pin numpy<2.0 for tf2onnx compatibility (uses deprecated np.object)
-          pip install "numpy<2.0" tensorflow tf2onnx
+          pip install tensorflow tf2onnx
 
       - name: Run pytest
         run: pytest tests/ -v
