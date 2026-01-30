@@ -2,7 +2,7 @@
 # Requires tf2onnx from GitHub main for NumPy 2.0 compatibility
 # See: https://github.com/onnx/tensorflow-onnx/issues/2373
 
-tensorflow>=2.14,<2.19
+tensorflow>=2.14,<2.21
 # Install from main branch for NumPy 2.0 fix (PR #2392)
 # TODO: Switch to PyPI release when tf2onnx >1.16.1 is released
 tf2onnx @ git+https://github.com/onnx/tensorflow-onnx.git@main
