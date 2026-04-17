@@ -91,7 +91,7 @@ jobs:
             --tolerance 0.01
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             build/BirdNET_GLOBAL_6K_V2.4_fp32.onnx
