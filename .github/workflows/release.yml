@@ -62,11 +62,23 @@ jobs:
           cd /tmp/birda && cargo build --release
           echo "/tmp/birda/target/release" >> $GITHUB_PATH
 
+      - name: Register models with birda
+        run: |
+          birda config init
+          birda models add fp32 \
+            --path build/BirdNET_GLOBAL_6K_V2.4_fp32.onnx \
+            --labels tests/fixtures/BirdNET_GLOBAL_6K_V2.4_Labels_en_uk.txt \
+            --type birdnet-v24 --default
+          birda models add fp16 \
+            --path build/BirdNET_GLOBAL_6K_V2.4_fp16.onnx \
+            --labels tests/fixtures/BirdNET_GLOBAL_6K_V2.4_Labels_en_uk.txt \
+            --type birdnet-v24
+
       - name: Verify FP32 model
         run: |
           mkdir -p build/fp32
           birda tests/fixtures/test_audio.wav \
-            --model build/BirdNET_GLOBAL_6K_V2.4_fp32.onnx \
+            -m fp32 \
             --output-dir build/fp32 \
             --format csv \
             --min-confidence 0.1
@@ -80,7 +92,7 @@ jobs:
         run: |
           mkdir -p build/fp16
           birda tests/fixtures/test_audio.wav \
-            --model build/BirdNET_GLOBAL_6K_V2.4_fp16.onnx \
+            -m fp16 \
             --output-dir build/fp16 \
             --format csv \
             --min-confidence 0.1
@@ -91,7 +103,7 @@ jobs:
             --tolerance 0.01
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             build/BirdNET_GLOBAL_6K_V2.4_fp32.onnx
