@@ -56,6 +56,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-birda-
 
+      - name: Install ONNX Runtime
+        run: |
+          curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz | tar xz -C /tmp
+          echo "LD_LIBRARY_PATH=/tmp/onnxruntime-linux-x64-1.23.2/lib" >> $GITHUB_ENV
+
       - name: Build birda
         run: |
           git clone --depth 1 --branch v1.3.0 https://github.com/tphakala/birda.git /tmp/birda
