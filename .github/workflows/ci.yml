@@ -150,4 +150,4 @@ jobs:
             tests/fixtures/baseline_predictions.csv \
             tests/output/fp16_predictions.csv \
             --tolerance 0.05 \
-            --min-confidence 0.10
+            --min-confidence 0.15
