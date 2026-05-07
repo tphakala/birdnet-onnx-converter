@@ -52,7 +52,7 @@ def create_dft_matrix(fft_size: int) -> np.ndarray:
     n = np.arange(fft_size, dtype=np.float32)[:, np.newaxis]
     k = np.arange(num_freqs, dtype=np.float32)[np.newaxis, :]
     dft_matrix = np.cos(2 * np.pi * k * n / fft_size)
-    return dft_matrix  # type: ignore[no-any-return]
+    return dft_matrix
 
 
 def get_tensor_shape(model: onnx.ModelProto, tensor_name: str) -> Optional[list[int]]:
