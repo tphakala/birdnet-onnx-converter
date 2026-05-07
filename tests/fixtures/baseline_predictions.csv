@@ -1,122 +1,318 @@
-Start (s),End (s),Scientific name,Common name,Confidence,File
-0.0,3.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4591,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-0.0,3.0,Ficedula parva,Red-breasted Flycatcher,0.3549,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-0.0,3.0,Tetrastes bonasia,Hazel Grouse,0.3076,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-6.0,9.0,Tetrastes bonasia,Hazel Grouse,0.5127,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-9.0,12.0,Ficedula parva,Red-breasted Flycatcher,0.3663,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-9.0,12.0,Tetrastes bonasia,Hazel Grouse,0.3304,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-15.0,18.0,Regulus regulus,Goldcrest,0.3822,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-24.0,27.0,Tetrastes bonasia,Hazel Grouse,0.2595,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-27.0,30.0,Tetrastes bonasia,Hazel Grouse,0.4718,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-27.0,30.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3009,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-30.0,33.0,Tetrastes bonasia,Hazel Grouse,0.2981,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-42.0,45.0,Regulus regulus,Goldcrest,0.3589,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-48.0,51.0,Regulus regulus,Goldcrest,0.3164,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-51.0,54.0,Ficedula parva,Red-breasted Flycatcher,0.3115,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-51.0,54.0,Tetrastes bonasia,Hazel Grouse,0.2990,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-54.0,57.0,Strix nebulosa,Great Gray Owl,0.4153,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-54.0,57.0,Accipiter gentilis,Northern Goshawk,0.2670,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-57.0,60.0,Tetrastes bonasia,Hazel Grouse,0.3509,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-60.0,63.0,Tetrastes bonasia,Hazel Grouse,0.4250,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-60.0,63.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3732,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-63.0,66.0,Tetrastes bonasia,Hazel Grouse,0.3980,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-72.0,75.0,Tetrastes bonasia,Hazel Grouse,0.3337,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-75.0,78.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3158,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-81.0,84.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2567,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-87.0,90.0,Strix nebulosa,Great Gray Owl,0.5007,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-87.0,90.0,Tetrastes bonasia,Hazel Grouse,0.3379,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-87.0,90.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2882,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-90.0,93.0,Tetrastes bonasia,Hazel Grouse,0.6416,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-90.0,93.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4381,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-93.0,96.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4315,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-93.0,96.0,Tetrastes bonasia,Hazel Grouse,0.2794,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-93.0,96.0,Ficedula parva,Red-breasted Flycatcher,0.2685,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-96.0,99.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3737,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-108.0,111.0,Ficedula parva,Red-breasted Flycatcher,0.5470,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-111.0,114.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2730,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-114.0,117.0,Tetrastes bonasia,Hazel Grouse,0.4113,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-114.0,117.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3847,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-117.0,120.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4197,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-120.0,123.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3253,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-123.0,126.0,Tetrastes bonasia,Hazel Grouse,0.3728,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-123.0,126.0,Ficedula parva,Red-breasted Flycatcher,0.3622,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-126.0,129.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4194,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-126.0,129.0,Tetrastes bonasia,Hazel Grouse,0.3378,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-129.0,132.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2836,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-132.0,135.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5614,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-135.0,138.0,Tetrastes bonasia,Hazel Grouse,0.2659,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-138.0,141.0,Tetrastes bonasia,Hazel Grouse,0.3264,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-138.0,141.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3258,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-141.0,144.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4113,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-153.0,156.0,Regulus regulus,Goldcrest,0.4286,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-153.0,156.0,Tetrastes bonasia,Hazel Grouse,0.4029,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-156.0,159.0,Tetrastes bonasia,Hazel Grouse,0.2858,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-159.0,162.0,Ficedula parva,Red-breasted Flycatcher,0.2610,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-162.0,165.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4936,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-162.0,165.0,Tetrastes bonasia,Hazel Grouse,0.3353,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-165.0,168.0,Ficedula parva,Red-breasted Flycatcher,0.2630,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-168.0,171.0,Tetrastes bonasia,Hazel Grouse,0.5615,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-168.0,171.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4986,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-171.0,174.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3265,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-174.0,177.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5058,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-174.0,177.0,Ficedula parva,Red-breasted Flycatcher,0.3953,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-174.0,177.0,Phylloscopus sibilatrix,Wood Warbler,0.3710,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-174.0,177.0,Tetrastes bonasia,Hazel Grouse,0.2740,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-177.0,180.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4563,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-177.0,180.0,Tetrastes bonasia,Hazel Grouse,0.4142,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-177.0,180.0,Strix nebulosa,Great Gray Owl,0.3672,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-183.0,186.0,Tetrastes bonasia,Hazel Grouse,0.6871,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-183.0,186.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4884,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-186.0,189.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3830,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-186.0,189.0,Tetrastes bonasia,Hazel Grouse,0.2553,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-189.0,192.0,Tetrastes bonasia,Hazel Grouse,0.3932,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-189.0,192.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2572,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-192.0,195.0,Ficedula parva,Red-breasted Flycatcher,0.3028,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-192.0,195.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2505,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-195.0,198.0,Regulus regulus,Goldcrest,0.2601,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-198.0,201.0,Ficedula parva,Red-breasted Flycatcher,0.4492,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-201.0,204.0,Ficedula parva,Red-breasted Flycatcher,0.3935,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-201.0,204.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3552,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-204.0,207.0,Tetrastes bonasia,Hazel Grouse,0.3892,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-204.0,207.0,Ficedula parva,Red-breasted Flycatcher,0.2981,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-204.0,207.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2676,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-207.0,210.0,Ficedula parva,Red-breasted Flycatcher,0.3318,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-210.0,213.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3046,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-210.0,213.0,Tetrastes bonasia,Hazel Grouse,0.2942,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-216.0,219.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4614,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-216.0,219.0,Ficedula parva,Red-breasted Flycatcher,0.4551,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-216.0,219.0,Tetrastes bonasia,Hazel Grouse,0.3014,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-219.0,222.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3068,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-219.0,222.0,Tetrastes bonasia,Hazel Grouse,0.2754,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-222.0,225.0,Tetrastes bonasia,Hazel Grouse,0.5328,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-225.0,228.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3198,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-228.0,231.0,Ficedula parva,Red-breasted Flycatcher,0.3723,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-231.0,234.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3346,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-231.0,234.0,Tetrastes bonasia,Hazel Grouse,0.3271,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-234.0,237.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3550,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-234.0,237.0,Tetrastes bonasia,Hazel Grouse,0.3011,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-234.0,237.0,Ficedula parva,Red-breasted Flycatcher,0.2737,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-237.0,240.0,Ficedula parva,Red-breasted Flycatcher,0.3030,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-240.0,243.0,Ficedula parva,Red-breasted Flycatcher,0.6335,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-243.0,246.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5464,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-243.0,246.0,Tetrastes bonasia,Hazel Grouse,0.4733,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-249.0,252.0,Ficedula parva,Red-breasted Flycatcher,0.4252,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-249.0,252.0,Tetrastes bonasia,Hazel Grouse,0.3844,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-252.0,255.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5453,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-252.0,255.0,Tetrastes bonasia,Hazel Grouse,0.2657,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-255.0,258.0,Ficedula parva,Red-breasted Flycatcher,0.2653,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-258.0,261.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3348,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-258.0,261.0,Tetrastes bonasia,Hazel Grouse,0.3312,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-261.0,264.0,Ficedula parva,Red-breasted Flycatcher,0.3771,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-267.0,270.0,Ficedula parva,Red-breasted Flycatcher,0.4113,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-270.0,273.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2925,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-270.0,273.0,Tetrastes bonasia,Hazel Grouse,0.2691,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-276.0,279.0,Regulus regulus,Goldcrest,0.3801,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-279.0,282.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2998,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-288.0,291.0,Ficedula parva,Red-breasted Flycatcher,0.3914,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-288.0,291.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2627,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-291.0,294.0,Tetrastes bonasia,Hazel Grouse,0.3411,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-291.0,294.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3201,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-294.0,297.0,Tetrastes bonasia,Hazel Grouse,0.4755,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-297.0,300.0,Tetrastes bonasia,Hazel Grouse,0.6740,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
-297.0,300.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3942,C:\Users\Tomi\AppData\Local\Temp\gradio\6bad917c88b7ac19f85479dea843ef07a2899ae59ce69a66db93297867c24611\test_audio.wav
+﻿Start (s),End (s),Scientific name,Common name,Confidence,File
+0.0,3.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4593,tests/fixtures/test_audio.wav
+0.0,3.0,Ficedula parva,Red-breasted Flycatcher,0.3549,tests/fixtures/test_audio.wav
+0.0,3.0,Tetrastes bonasia,Hazel Grouse,0.3072,tests/fixtures/test_audio.wav
+0.0,3.0,Phylloscopus sibilatrix,Wood Warbler,0.1549,tests/fixtures/test_audio.wav
+0.0,3.0,Accipiter gentilis,Eurasian Goshawk,0.1422,tests/fixtures/test_audio.wav
+3.0,6.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2104,tests/fixtures/test_audio.wav
+3.0,6.0,Tetrastes bonasia,Hazel Grouse,0.1940,tests/fixtures/test_audio.wav
+6.0,9.0,Tetrastes bonasia,Hazel Grouse,0.5125,tests/fixtures/test_audio.wav
+6.0,9.0,Accipiter gentilis,Eurasian Goshawk,0.1992,tests/fixtures/test_audio.wav
+6.0,9.0,Strix nebulosa,Great Grey Owl,0.1444,tests/fixtures/test_audio.wav
+9.0,12.0,Ficedula parva,Red-breasted Flycatcher,0.3660,tests/fixtures/test_audio.wav
+9.0,12.0,Tetrastes bonasia,Hazel Grouse,0.3304,tests/fixtures/test_audio.wav
+9.0,12.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1816,tests/fixtures/test_audio.wav
+9.0,12.0,Regulus regulus,Goldcrest,0.1200,tests/fixtures/test_audio.wav
+12.0,15.0,Phylloscopus sibilatrix,Wood Warbler,0.1835,tests/fixtures/test_audio.wav
+12.0,15.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1791,tests/fixtures/test_audio.wav
+12.0,15.0,Nucifraga caryocatactes,Spotted Nutcracker,0.1660,tests/fixtures/test_audio.wav
+12.0,15.0,Tetrastes bonasia,Hazel Grouse,0.1622,tests/fixtures/test_audio.wav
+12.0,15.0,Accipiter gentilis,Eurasian Goshawk,0.1143,tests/fixtures/test_audio.wav
+15.0,18.0,Regulus regulus,Goldcrest,0.3803,tests/fixtures/test_audio.wav
+15.0,18.0,Tetrastes bonasia,Hazel Grouse,0.2378,tests/fixtures/test_audio.wav
+15.0,18.0,Ficedula parva,Red-breasted Flycatcher,0.1027,tests/fixtures/test_audio.wav
+18.0,21.0,Strix nebulosa,Great Grey Owl,0.2316,tests/fixtures/test_audio.wav
+18.0,21.0,Accipiter gentilis,Eurasian Goshawk,0.2053,tests/fixtures/test_audio.wav
+18.0,21.0,Tetrastes bonasia,Hazel Grouse,0.1589,tests/fixtures/test_audio.wav
+18.0,21.0,Ficedula parva,Red-breasted Flycatcher,0.1551,tests/fixtures/test_audio.wav
+18.0,21.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1520,tests/fixtures/test_audio.wav
+21.0,24.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2187,tests/fixtures/test_audio.wav
+21.0,24.0,Tetrastes bonasia,Hazel Grouse,0.2176,tests/fixtures/test_audio.wav
+24.0,27.0,Tetrastes bonasia,Hazel Grouse,0.2598,tests/fixtures/test_audio.wav
+24.0,27.0,Accipiter gentilis,Eurasian Goshawk,0.2245,tests/fixtures/test_audio.wav
+27.0,30.0,Tetrastes bonasia,Hazel Grouse,0.4695,tests/fixtures/test_audio.wav
+27.0,30.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3010,tests/fixtures/test_audio.wav
+27.0,30.0,Strix nebulosa,Great Grey Owl,0.1455,tests/fixtures/test_audio.wav
+27.0,30.0,Ficedula parva,Red-breasted Flycatcher,0.1194,tests/fixtures/test_audio.wav
+30.0,33.0,Tetrastes bonasia,Hazel Grouse,0.2982,tests/fixtures/test_audio.wav
+30.0,33.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1269,tests/fixtures/test_audio.wav
+30.0,33.0,Accipiter gentilis,Eurasian Goshawk,0.1239,tests/fixtures/test_audio.wav
+33.0,36.0,Tetrastes bonasia,Hazel Grouse,0.1413,tests/fixtures/test_audio.wav
+33.0,36.0,Accipiter gentilis,Eurasian Goshawk,0.1008,tests/fixtures/test_audio.wav
+36.0,39.0,Tetrastes bonasia,Hazel Grouse,0.1112,tests/fixtures/test_audio.wav
+39.0,42.0,Tetrastes bonasia,Hazel Grouse,0.2460,tests/fixtures/test_audio.wav
+42.0,45.0,Regulus regulus,Goldcrest,0.3601,tests/fixtures/test_audio.wav
+42.0,45.0,Tetrastes bonasia,Hazel Grouse,0.1350,tests/fixtures/test_audio.wav
+48.0,51.0,Regulus regulus,Goldcrest,0.3155,tests/fixtures/test_audio.wav
+51.0,54.0,Ficedula parva,Red-breasted Flycatcher,0.3104,tests/fixtures/test_audio.wav
+51.0,54.0,Tetrastes bonasia,Hazel Grouse,0.2993,tests/fixtures/test_audio.wav
+51.0,54.0,Accipiter gentilis,Eurasian Goshawk,0.1347,tests/fixtures/test_audio.wav
+54.0,57.0,Strix nebulosa,Great Grey Owl,0.4173,tests/fixtures/test_audio.wav
+54.0,57.0,Accipiter gentilis,Eurasian Goshawk,0.2662,tests/fixtures/test_audio.wav
+54.0,57.0,Tetrastes bonasia,Hazel Grouse,0.2018,tests/fixtures/test_audio.wav
+54.0,57.0,Ficedula parva,Red-breasted Flycatcher,0.1751,tests/fixtures/test_audio.wav
+54.0,57.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1701,tests/fixtures/test_audio.wav
+57.0,60.0,Tetrastes bonasia,Hazel Grouse,0.3499,tests/fixtures/test_audio.wav
+57.0,60.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1552,tests/fixtures/test_audio.wav
+57.0,60.0,Regulus regulus,Goldcrest,0.1522,tests/fixtures/test_audio.wav
+57.0,60.0,Strix nebulosa,Great Grey Owl,0.1411,tests/fixtures/test_audio.wav
+60.0,63.0,Tetrastes bonasia,Hazel Grouse,0.4255,tests/fixtures/test_audio.wav
+60.0,63.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3734,tests/fixtures/test_audio.wav
+60.0,63.0,Accipiter gentilis,Eurasian Goshawk,0.1461,tests/fixtures/test_audio.wav
+60.0,63.0,Strix nebulosa,Great Grey Owl,0.1079,tests/fixtures/test_audio.wav
+63.0,66.0,Tetrastes bonasia,Hazel Grouse,0.3973,tests/fixtures/test_audio.wav
+63.0,66.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1837,tests/fixtures/test_audio.wav
+66.0,69.0,Tetrastes bonasia,Hazel Grouse,0.1573,tests/fixtures/test_audio.wav
+72.0,75.0,Tetrastes bonasia,Hazel Grouse,0.3336,tests/fixtures/test_audio.wav
+72.0,75.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1542,tests/fixtures/test_audio.wav
+75.0,78.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3159,tests/fixtures/test_audio.wav
+75.0,78.0,Tetrastes bonasia,Hazel Grouse,0.1238,tests/fixtures/test_audio.wav
+75.0,78.0,Ficedula parva,Red-breasted Flycatcher,0.1131,tests/fixtures/test_audio.wav
+78.0,81.0,Accipiter gentilis,Eurasian Goshawk,0.1809,tests/fixtures/test_audio.wav
+78.0,81.0,Tetrastes bonasia,Hazel Grouse,0.1789,tests/fixtures/test_audio.wav
+81.0,84.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2568,tests/fixtures/test_audio.wav
+81.0,84.0,Tetrastes bonasia,Hazel Grouse,0.1844,tests/fixtures/test_audio.wav
+81.0,84.0,Strix nebulosa,Great Grey Owl,0.1553,tests/fixtures/test_audio.wav
+81.0,84.0,Ficedula parva,Red-breasted Flycatcher,0.1406,tests/fixtures/test_audio.wav
+84.0,87.0,Tetrastes bonasia,Hazel Grouse,0.2233,tests/fixtures/test_audio.wav
+84.0,87.0,Ficedula parva,Red-breasted Flycatcher,0.1953,tests/fixtures/test_audio.wav
+84.0,87.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1410,tests/fixtures/test_audio.wav
+87.0,90.0,Strix nebulosa,Great Grey Owl,0.5010,tests/fixtures/test_audio.wav
+87.0,90.0,Tetrastes bonasia,Hazel Grouse,0.3376,tests/fixtures/test_audio.wav
+87.0,90.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2892,tests/fixtures/test_audio.wav
+87.0,90.0,Accipiter gentilis,Eurasian Goshawk,0.1422,tests/fixtures/test_audio.wav
+87.0,90.0,Nucifraga caryocatactes,Spotted Nutcracker,0.1058,tests/fixtures/test_audio.wav
+90.0,93.0,Tetrastes bonasia,Hazel Grouse,0.6420,tests/fixtures/test_audio.wav
+90.0,93.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4379,tests/fixtures/test_audio.wav
+90.0,93.0,Ficedula parva,Red-breasted Flycatcher,0.1830,tests/fixtures/test_audio.wav
+90.0,93.0,Accipiter gentilis,Eurasian Goshawk,0.1218,tests/fixtures/test_audio.wav
+93.0,96.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4316,tests/fixtures/test_audio.wav
+93.0,96.0,Tetrastes bonasia,Hazel Grouse,0.2795,tests/fixtures/test_audio.wav
+93.0,96.0,Ficedula parva,Red-breasted Flycatcher,0.2687,tests/fixtures/test_audio.wav
+93.0,96.0,Regulus regulus,Goldcrest,0.1482,tests/fixtures/test_audio.wav
+93.0,96.0,Phylloscopus sibilatrix,Wood Warbler,0.1245,tests/fixtures/test_audio.wav
+96.0,99.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3736,tests/fixtures/test_audio.wav
+96.0,99.0,Tetrastes bonasia,Hazel Grouse,0.2306,tests/fixtures/test_audio.wav
+96.0,99.0,Ficedula parva,Red-breasted Flycatcher,0.1307,tests/fixtures/test_audio.wav
+99.0,102.0,Tetrastes bonasia,Hazel Grouse,0.1953,tests/fixtures/test_audio.wav
+99.0,102.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1416,tests/fixtures/test_audio.wav
+99.0,102.0,Ficedula parva,Red-breasted Flycatcher,0.1346,tests/fixtures/test_audio.wav
+99.0,102.0,Nucifraga caryocatactes,Spotted Nutcracker,0.1111,tests/fixtures/test_audio.wav
+102.0,105.0,Regulus regulus,Goldcrest,0.1750,tests/fixtures/test_audio.wav
+102.0,105.0,Ficedula parva,Red-breasted Flycatcher,0.1613,tests/fixtures/test_audio.wav
+102.0,105.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1530,tests/fixtures/test_audio.wav
+102.0,105.0,Tetrastes bonasia,Hazel Grouse,0.1384,tests/fixtures/test_audio.wav
+108.0,111.0,Ficedula parva,Red-breasted Flycatcher,0.5470,tests/fixtures/test_audio.wav
+108.0,111.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2082,tests/fixtures/test_audio.wav
+108.0,111.0,Regulus regulus,Goldcrest,0.1480,tests/fixtures/test_audio.wav
+108.0,111.0,Tetrastes bonasia,Hazel Grouse,0.1012,tests/fixtures/test_audio.wav
+111.0,114.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2730,tests/fixtures/test_audio.wav
+111.0,114.0,Tetrastes bonasia,Hazel Grouse,0.1138,tests/fixtures/test_audio.wav
+114.0,117.0,Tetrastes bonasia,Hazel Grouse,0.4116,tests/fixtures/test_audio.wav
+114.0,117.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3851,tests/fixtures/test_audio.wav
+114.0,117.0,Ficedula parva,Red-breasted Flycatcher,0.1394,tests/fixtures/test_audio.wav
+117.0,120.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4190,tests/fixtures/test_audio.wav
+117.0,120.0,Tetrastes bonasia,Hazel Grouse,0.1755,tests/fixtures/test_audio.wav
+117.0,120.0,Tetrao urogallus,Western Capercaillie,0.1382,tests/fixtures/test_audio.wav
+117.0,120.0,Ficedula parva,Red-breasted Flycatcher,0.1337,tests/fixtures/test_audio.wav
+120.0,123.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3252,tests/fixtures/test_audio.wav
+120.0,123.0,Tetrastes bonasia,Hazel Grouse,0.1700,tests/fixtures/test_audio.wav
+120.0,123.0,Ficedula parva,Red-breasted Flycatcher,0.1208,tests/fixtures/test_audio.wav
+123.0,126.0,Tetrastes bonasia,Hazel Grouse,0.3726,tests/fixtures/test_audio.wav
+123.0,126.0,Ficedula parva,Red-breasted Flycatcher,0.3619,tests/fixtures/test_audio.wav
+123.0,126.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1977,tests/fixtures/test_audio.wav
+123.0,126.0,Nucifraga caryocatactes,Spotted Nutcracker,0.1318,tests/fixtures/test_audio.wav
+123.0,126.0,Ficedula albicollis,Collared Flycatcher,0.1317,tests/fixtures/test_audio.wav
+126.0,129.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4203,tests/fixtures/test_audio.wav
+126.0,129.0,Tetrastes bonasia,Hazel Grouse,0.3382,tests/fixtures/test_audio.wav
+126.0,129.0,Ficedula parva,Red-breasted Flycatcher,0.1606,tests/fixtures/test_audio.wav
+129.0,132.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2837,tests/fixtures/test_audio.wav
+129.0,132.0,Tetrastes bonasia,Hazel Grouse,0.2420,tests/fixtures/test_audio.wav
+132.0,135.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5611,tests/fixtures/test_audio.wav
+132.0,135.0,Ficedula parva,Red-breasted Flycatcher,0.1178,tests/fixtures/test_audio.wav
+135.0,138.0,Tetrastes bonasia,Hazel Grouse,0.2656,tests/fixtures/test_audio.wav
+135.0,138.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2156,tests/fixtures/test_audio.wav
+138.0,141.0,Tetrastes bonasia,Hazel Grouse,0.3264,tests/fixtures/test_audio.wav
+138.0,141.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3259,tests/fixtures/test_audio.wav
+138.0,141.0,Ficedula parva,Red-breasted Flycatcher,0.2364,tests/fixtures/test_audio.wav
+141.0,144.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4115,tests/fixtures/test_audio.wav
+141.0,144.0,Ficedula parva,Red-breasted Flycatcher,0.2342,tests/fixtures/test_audio.wav
+141.0,144.0,Tetrastes bonasia,Hazel Grouse,0.1578,tests/fixtures/test_audio.wav
+144.0,147.0,Tetrastes bonasia,Hazel Grouse,0.1333,tests/fixtures/test_audio.wav
+144.0,147.0,Ficedula parva,Red-breasted Flycatcher,0.1190,tests/fixtures/test_audio.wav
+144.0,147.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1151,tests/fixtures/test_audio.wav
+147.0,150.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2337,tests/fixtures/test_audio.wav
+147.0,150.0,Tetrastes bonasia,Hazel Grouse,0.1465,tests/fixtures/test_audio.wav
+147.0,150.0,Ficedula parva,Red-breasted Flycatcher,0.1131,tests/fixtures/test_audio.wav
+153.0,156.0,Regulus regulus,Goldcrest,0.4299,tests/fixtures/test_audio.wav
+153.0,156.0,Tetrastes bonasia,Hazel Grouse,0.4025,tests/fixtures/test_audio.wav
+153.0,156.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2167,tests/fixtures/test_audio.wav
+153.0,156.0,Ficedula parva,Red-breasted Flycatcher,0.1141,tests/fixtures/test_audio.wav
+156.0,159.0,Tetrastes bonasia,Hazel Grouse,0.2852,tests/fixtures/test_audio.wav
+156.0,159.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1624,tests/fixtures/test_audio.wav
+156.0,159.0,Ficedula parva,Red-breasted Flycatcher,0.1178,tests/fixtures/test_audio.wav
+159.0,162.0,Ficedula parva,Red-breasted Flycatcher,0.2609,tests/fixtures/test_audio.wav
+159.0,162.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2214,tests/fixtures/test_audio.wav
+159.0,162.0,Tetrastes bonasia,Hazel Grouse,0.1514,tests/fixtures/test_audio.wav
+162.0,165.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4930,tests/fixtures/test_audio.wav
+162.0,165.0,Tetrastes bonasia,Hazel Grouse,0.3354,tests/fixtures/test_audio.wav
+165.0,168.0,Ficedula parva,Red-breasted Flycatcher,0.2629,tests/fixtures/test_audio.wav
+165.0,168.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1812,tests/fixtures/test_audio.wav
+165.0,168.0,Phylloscopus sibilatrix,Wood Warbler,0.1048,tests/fixtures/test_audio.wav
+168.0,171.0,Tetrastes bonasia,Hazel Grouse,0.5621,tests/fixtures/test_audio.wav
+168.0,171.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4981,tests/fixtures/test_audio.wav
+168.0,171.0,Ficedula parva,Red-breasted Flycatcher,0.1777,tests/fixtures/test_audio.wav
+171.0,174.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3267,tests/fixtures/test_audio.wav
+171.0,174.0,Tetrastes bonasia,Hazel Grouse,0.1331,tests/fixtures/test_audio.wav
+174.0,177.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5056,tests/fixtures/test_audio.wav
+174.0,177.0,Ficedula parva,Red-breasted Flycatcher,0.3952,tests/fixtures/test_audio.wav
+174.0,177.0,Phylloscopus sibilatrix,Wood Warbler,0.3712,tests/fixtures/test_audio.wav
+174.0,177.0,Tetrastes bonasia,Hazel Grouse,0.2738,tests/fixtures/test_audio.wav
+174.0,177.0,Accipiter gentilis,Eurasian Goshawk,0.1293,tests/fixtures/test_audio.wav
+177.0,180.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4551,tests/fixtures/test_audio.wav
+177.0,180.0,Tetrastes bonasia,Hazel Grouse,0.4148,tests/fixtures/test_audio.wav
+177.0,180.0,Strix nebulosa,Great Grey Owl,0.3666,tests/fixtures/test_audio.wav
+177.0,180.0,Ficedula parva,Red-breasted Flycatcher,0.1631,tests/fixtures/test_audio.wav
+180.0,183.0,Tetrastes bonasia,Hazel Grouse,0.2294,tests/fixtures/test_audio.wav
+180.0,183.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1963,tests/fixtures/test_audio.wav
+180.0,183.0,Ficedula parva,Red-breasted Flycatcher,0.1379,tests/fixtures/test_audio.wav
+180.0,183.0,Accipiter gentilis,Eurasian Goshawk,0.1327,tests/fixtures/test_audio.wav
+183.0,186.0,Tetrastes bonasia,Hazel Grouse,0.6868,tests/fixtures/test_audio.wav
+183.0,186.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4883,tests/fixtures/test_audio.wav
+183.0,186.0,Ficedula parva,Red-breasted Flycatcher,0.1687,tests/fixtures/test_audio.wav
+186.0,189.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3821,tests/fixtures/test_audio.wav
+186.0,189.0,Tetrastes bonasia,Hazel Grouse,0.2550,tests/fixtures/test_audio.wav
+186.0,189.0,Tetrao urogallus,Western Capercaillie,0.1153,tests/fixtures/test_audio.wav
+186.0,189.0,Ficedula parva,Red-breasted Flycatcher,0.1054,tests/fixtures/test_audio.wav
+189.0,192.0,Tetrastes bonasia,Hazel Grouse,0.3929,tests/fixtures/test_audio.wav
+189.0,192.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2572,tests/fixtures/test_audio.wav
+189.0,192.0,Ficedula parva,Red-breasted Flycatcher,0.1727,tests/fixtures/test_audio.wav
+192.0,195.0,Ficedula parva,Red-breasted Flycatcher,0.3030,tests/fixtures/test_audio.wav
+192.0,195.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2500,tests/fixtures/test_audio.wav
+192.0,195.0,Tetrastes bonasia,Hazel Grouse,0.1534,tests/fixtures/test_audio.wav
+195.0,198.0,Regulus regulus,Goldcrest,0.2601,tests/fixtures/test_audio.wav
+195.0,198.0,Ficedula parva,Red-breasted Flycatcher,0.2456,tests/fixtures/test_audio.wav
+195.0,198.0,Tetrastes bonasia,Hazel Grouse,0.2330,tests/fixtures/test_audio.wav
+195.0,198.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1756,tests/fixtures/test_audio.wav
+198.0,201.0,Ficedula parva,Red-breasted Flycatcher,0.4492,tests/fixtures/test_audio.wav
+198.0,201.0,Tetrastes bonasia,Hazel Grouse,0.1501,tests/fixtures/test_audio.wav
+198.0,201.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1475,tests/fixtures/test_audio.wav
+201.0,204.0,Ficedula parva,Red-breasted Flycatcher,0.3943,tests/fixtures/test_audio.wav
+201.0,204.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3550,tests/fixtures/test_audio.wav
+201.0,204.0,Tetrastes bonasia,Hazel Grouse,0.2295,tests/fixtures/test_audio.wav
+201.0,204.0,Strix nebulosa,Great Grey Owl,0.2076,tests/fixtures/test_audio.wav
+201.0,204.0,Phylloscopus sibilatrix,Wood Warbler,0.1018,tests/fixtures/test_audio.wav
+204.0,207.0,Tetrastes bonasia,Hazel Grouse,0.3887,tests/fixtures/test_audio.wav
+204.0,207.0,Ficedula parva,Red-breasted Flycatcher,0.2982,tests/fixtures/test_audio.wav
+204.0,207.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2676,tests/fixtures/test_audio.wav
+204.0,207.0,Tetrao urogallus,Western Capercaillie,0.1716,tests/fixtures/test_audio.wav
+207.0,210.0,Ficedula parva,Red-breasted Flycatcher,0.3313,tests/fixtures/test_audio.wav
+207.0,210.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1910,tests/fixtures/test_audio.wav
+207.0,210.0,Tetrastes bonasia,Hazel Grouse,0.1900,tests/fixtures/test_audio.wav
+210.0,213.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3046,tests/fixtures/test_audio.wav
+210.0,213.0,Tetrastes bonasia,Hazel Grouse,0.2937,tests/fixtures/test_audio.wav
+210.0,213.0,Strix nebulosa,Great Grey Owl,0.1401,tests/fixtures/test_audio.wav
+210.0,213.0,Ficedula parva,Red-breasted Flycatcher,0.1363,tests/fixtures/test_audio.wav
+210.0,213.0,Accipiter gentilis,Eurasian Goshawk,0.1023,tests/fixtures/test_audio.wav
+213.0,216.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2123,tests/fixtures/test_audio.wav
+213.0,216.0,Accipiter gentilis,Eurasian Goshawk,0.2095,tests/fixtures/test_audio.wav
+213.0,216.0,Tetrastes bonasia,Hazel Grouse,0.1905,tests/fixtures/test_audio.wav
+213.0,216.0,Ficedula parva,Red-breasted Flycatcher,0.1875,tests/fixtures/test_audio.wav
+213.0,216.0,Strix nebulosa,Great Grey Owl,0.1636,tests/fixtures/test_audio.wav
+216.0,219.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.4612,tests/fixtures/test_audio.wav
+216.0,219.0,Ficedula parva,Red-breasted Flycatcher,0.4554,tests/fixtures/test_audio.wav
+216.0,219.0,Tetrastes bonasia,Hazel Grouse,0.3011,tests/fixtures/test_audio.wav
+216.0,219.0,Accipiter gentilis,Eurasian Goshawk,0.1163,tests/fixtures/test_audio.wav
+216.0,219.0,Ficedula albicollis,Collared Flycatcher,0.1069,tests/fixtures/test_audio.wav
+219.0,222.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3075,tests/fixtures/test_audio.wav
+219.0,222.0,Tetrastes bonasia,Hazel Grouse,0.2747,tests/fixtures/test_audio.wav
+219.0,222.0,Accipiter gentilis,Eurasian Goshawk,0.1813,tests/fixtures/test_audio.wav
+219.0,222.0,Ficedula parva,Red-breasted Flycatcher,0.1259,tests/fixtures/test_audio.wav
+222.0,225.0,Tetrastes bonasia,Hazel Grouse,0.5327,tests/fixtures/test_audio.wav
+222.0,225.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2069,tests/fixtures/test_audio.wav
+222.0,225.0,Ficedula parva,Red-breasted Flycatcher,0.2036,tests/fixtures/test_audio.wav
+222.0,225.0,Accipiter gentilis,Eurasian Goshawk,0.1435,tests/fixtures/test_audio.wav
+225.0,228.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3195,tests/fixtures/test_audio.wav
+225.0,228.0,Ficedula parva,Red-breasted Flycatcher,0.2106,tests/fixtures/test_audio.wav
+225.0,228.0,Tetrastes bonasia,Hazel Grouse,0.1881,tests/fixtures/test_audio.wav
+225.0,228.0,Strix nebulosa,Great Grey Owl,0.1035,tests/fixtures/test_audio.wav
+228.0,231.0,Ficedula parva,Red-breasted Flycatcher,0.3724,tests/fixtures/test_audio.wav
+228.0,231.0,Tetrastes bonasia,Hazel Grouse,0.2341,tests/fixtures/test_audio.wav
+228.0,231.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1066,tests/fixtures/test_audio.wav
+231.0,234.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3347,tests/fixtures/test_audio.wav
+231.0,234.0,Tetrastes bonasia,Hazel Grouse,0.3274,tests/fixtures/test_audio.wav
+231.0,234.0,Ficedula parva,Red-breasted Flycatcher,0.1823,tests/fixtures/test_audio.wav
+231.0,234.0,Strix nebulosa,Great Grey Owl,0.1282,tests/fixtures/test_audio.wav
+234.0,237.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3543,tests/fixtures/test_audio.wav
+234.0,237.0,Tetrastes bonasia,Hazel Grouse,0.3010,tests/fixtures/test_audio.wav
+234.0,237.0,Ficedula parva,Red-breasted Flycatcher,0.2735,tests/fixtures/test_audio.wav
+237.0,240.0,Ficedula parva,Red-breasted Flycatcher,0.3033,tests/fixtures/test_audio.wav
+237.0,240.0,Tetrastes bonasia,Hazel Grouse,0.1671,tests/fixtures/test_audio.wav
+237.0,240.0,Phylloscopus sibilatrix,Wood Warbler,0.1386,tests/fixtures/test_audio.wav
+237.0,240.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1371,tests/fixtures/test_audio.wav
+240.0,243.0,Ficedula parva,Red-breasted Flycatcher,0.6332,tests/fixtures/test_audio.wav
+240.0,243.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1638,tests/fixtures/test_audio.wav
+240.0,243.0,Tetrastes bonasia,Hazel Grouse,0.1111,tests/fixtures/test_audio.wav
+243.0,246.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5463,tests/fixtures/test_audio.wav
+243.0,246.0,Tetrastes bonasia,Hazel Grouse,0.4730,tests/fixtures/test_audio.wav
+243.0,246.0,Ficedula parva,Red-breasted Flycatcher,0.1573,tests/fixtures/test_audio.wav
+246.0,249.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1587,tests/fixtures/test_audio.wav
+246.0,249.0,Tetrastes bonasia,Hazel Grouse,0.1453,tests/fixtures/test_audio.wav
+249.0,252.0,Ficedula parva,Red-breasted Flycatcher,0.4243,tests/fixtures/test_audio.wav
+249.0,252.0,Tetrastes bonasia,Hazel Grouse,0.3851,tests/fixtures/test_audio.wav
+249.0,252.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2072,tests/fixtures/test_audio.wav
+252.0,255.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.5461,tests/fixtures/test_audio.wav
+252.0,255.0,Tetrastes bonasia,Hazel Grouse,0.2659,tests/fixtures/test_audio.wav
+252.0,255.0,Strix nebulosa,Great Grey Owl,0.1256,tests/fixtures/test_audio.wav
+255.0,258.0,Ficedula parva,Red-breasted Flycatcher,0.2653,tests/fixtures/test_audio.wav
+255.0,258.0,Tetrastes bonasia,Hazel Grouse,0.2378,tests/fixtures/test_audio.wav
+255.0,258.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1899,tests/fixtures/test_audio.wav
+258.0,261.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3342,tests/fixtures/test_audio.wav
+258.0,261.0,Tetrastes bonasia,Hazel Grouse,0.3323,tests/fixtures/test_audio.wav
+258.0,261.0,Ficedula parva,Red-breasted Flycatcher,0.1620,tests/fixtures/test_audio.wav
+261.0,264.0,Ficedula parva,Red-breasted Flycatcher,0.3774,tests/fixtures/test_audio.wav
+261.0,264.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2436,tests/fixtures/test_audio.wav
+261.0,264.0,Tetrastes bonasia,Hazel Grouse,0.2434,tests/fixtures/test_audio.wav
+261.0,264.0,Accipiter gentilis,Eurasian Goshawk,0.1589,tests/fixtures/test_audio.wav
+261.0,264.0,Phylloscopus sibilatrix,Wood Warbler,0.1373,tests/fixtures/test_audio.wav
+264.0,267.0,Tetrastes bonasia,Hazel Grouse,0.1881,tests/fixtures/test_audio.wav
+264.0,267.0,Ficedula parva,Red-breasted Flycatcher,0.1558,tests/fixtures/test_audio.wav
+264.0,267.0,Accipiter gentilis,Eurasian Goshawk,0.1216,tests/fixtures/test_audio.wav
+264.0,267.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1154,tests/fixtures/test_audio.wav
+264.0,267.0,Phylloscopus sibilatrix,Wood Warbler,0.1150,tests/fixtures/test_audio.wav
+267.0,270.0,Ficedula parva,Red-breasted Flycatcher,0.4119,tests/fixtures/test_audio.wav
+267.0,270.0,Tetrastes bonasia,Hazel Grouse,0.2181,tests/fixtures/test_audio.wav
+267.0,270.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1470,tests/fixtures/test_audio.wav
+267.0,270.0,Ficedula albicollis,Collared Flycatcher,0.1277,tests/fixtures/test_audio.wav
+270.0,273.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2929,tests/fixtures/test_audio.wav
+270.0,273.0,Tetrastes bonasia,Hazel Grouse,0.2682,tests/fixtures/test_audio.wav
+270.0,273.0,Accipiter gentilis,Eurasian Goshawk,0.1428,tests/fixtures/test_audio.wav
+276.0,279.0,Regulus regulus,Goldcrest,0.3800,tests/fixtures/test_audio.wav
+276.0,279.0,Tetrastes bonasia,Hazel Grouse,0.1190,tests/fixtures/test_audio.wav
+276.0,279.0,Ficedula parva,Red-breasted Flycatcher,0.1074,tests/fixtures/test_audio.wav
+279.0,282.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3003,tests/fixtures/test_audio.wav
+279.0,282.0,Tetrastes bonasia,Hazel Grouse,0.1425,tests/fixtures/test_audio.wav
+279.0,282.0,Ficedula parva,Red-breasted Flycatcher,0.1037,tests/fixtures/test_audio.wav
+282.0,285.0,Ficedula parva,Red-breasted Flycatcher,0.2185,tests/fixtures/test_audio.wav
+282.0,285.0,Tetrastes bonasia,Hazel Grouse,0.1519,tests/fixtures/test_audio.wav
+282.0,285.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1353,tests/fixtures/test_audio.wav
+285.0,288.0,Tetrastes bonasia,Hazel Grouse,0.1773,tests/fixtures/test_audio.wav
+285.0,288.0,Accipiter gentilis,Eurasian Goshawk,0.1284,tests/fixtures/test_audio.wav
+285.0,288.0,Regulus regulus,Goldcrest,0.1170,tests/fixtures/test_audio.wav
+288.0,291.0,Ficedula parva,Red-breasted Flycatcher,0.3920,tests/fixtures/test_audio.wav
+288.0,291.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.2625,tests/fixtures/test_audio.wav
+288.0,291.0,Accipiter gentilis,Eurasian Goshawk,0.1606,tests/fixtures/test_audio.wav
+288.0,291.0,Tetrastes bonasia,Hazel Grouse,0.1268,tests/fixtures/test_audio.wav
+288.0,291.0,Columba oenas,Stock Dove,0.1200,tests/fixtures/test_audio.wav
+291.0,294.0,Tetrastes bonasia,Hazel Grouse,0.3409,tests/fixtures/test_audio.wav
+291.0,294.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3204,tests/fixtures/test_audio.wav
+291.0,294.0,Ficedula parva,Red-breasted Flycatcher,0.2393,tests/fixtures/test_audio.wav
+291.0,294.0,Strix nebulosa,Great Grey Owl,0.1149,tests/fixtures/test_audio.wav
+291.0,294.0,Phylloscopus sibilatrix,Wood Warbler,0.1077,tests/fixtures/test_audio.wav
+294.0,297.0,Tetrastes bonasia,Hazel Grouse,0.4753,tests/fixtures/test_audio.wav
+294.0,297.0,Regulus regulus,Goldcrest,0.1801,tests/fixtures/test_audio.wav
+294.0,297.0,Ficedula parva,Red-breasted Flycatcher,0.1792,tests/fixtures/test_audio.wav
+294.0,297.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.1187,tests/fixtures/test_audio.wav
+297.0,300.0,Tetrastes bonasia,Hazel Grouse,0.6737,tests/fixtures/test_audio.wav
+297.0,300.0,Picoides tridactylus,Eurasian Three-toed Woodpecker,0.3945,tests/fixtures/test_audio.wav
+297.0,300.0,Ficedula parva,Red-breasted Flycatcher,0.1817,tests/fixtures/test_audio.wav
