@@ -82,16 +82,15 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache birda build
+      - name: Cache cargo registry
         uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            /tmp/birda/target
-          key: ${{ runner.os }}-birda-${{ hashFiles('/tmp/birda/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-registry
           restore-keys: |
-            ${{ runner.os }}-birda-
+            ${{ runner.os }}-cargo-
 
       - name: Install ONNX Runtime
         run: |
@@ -100,9 +99,10 @@ jobs:
 
       - name: Build birda
         run: |
-          git clone --depth 1 --branch v1.3.0 https://github.com/tphakala/birda.git /tmp/birda
-          cd /tmp/birda && cargo build --release
-          echo "/tmp/birda/target/release" >> $GITHUB_PATH
+          BIRDA_DIR="/tmp/birda-${{ matrix.python-version }}"
+          git clone --depth 1 --branch v1.3.0 https://github.com/tphakala/birda.git "$BIRDA_DIR"
+          cd "$BIRDA_DIR" && cargo build --release
+          echo "$BIRDA_DIR/target/release" >> $GITHUB_PATH
 
       - name: Register models with birda
         run: |
@@ -155,7 +155,7 @@ jobs:
             --min-confidence 0.10
 
       - name: Upload predictions for baseline regeneration
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.11'
         uses: actions/upload-artifact@v4
         with:
           name: birda-predictions
