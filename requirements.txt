@@ -9,7 +9,7 @@ onnxslim>=0.1.0
 # Install separately: pip install onnx-simplifier
 
 # FP16 conversion
-onnxconverter-common>=1.13.0
+onnxconverter-common>=1.16.0
 
 # TFLite conversion (optional)
 # tensorflow>=2.13.0
