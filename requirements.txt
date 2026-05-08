@@ -1,7 +1,7 @@
 # Core dependencies
 onnx>=1.14.0
 numpy>=1.21.0
-onnxruntime>=1.16.0
+onnxruntime>=1.20.1
 
 # Optimization tools
 onnxslim>=0.1.0
