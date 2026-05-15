@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Convert Keras model to TFLite and ONNX formats.
+Convert bird classification models to TFLite and ONNX formats.
 
-This script handles conversion of BirdNET Keras models (.keras format) to
-TFLite and ONNX formats for deployment on various platforms.
+Supports BirdNET Keras models (.keras), TFLite models (.tflite),
+and TensorFlow SavedModel directories (e.g., Google Perch v2).
 
 Usage:
-    python convert.py [--input model.keras] [--output-dir ./]
+    python convert.py --input model.keras --output-dir ./
+    python convert.py --input saved_model_dir/ --output-dir ./ --onnx-only
+    python convert.py --input model.tflite --output-dir ./ --onnx-only
 
 Requirements:
     pip install tensorflow tf2onnx onnx
@@ -14,6 +16,8 @@ Requirements:
 
 import argparse
 import json
+import subprocess
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -123,11 +127,38 @@ def convert_to_onnx(model, output_path: str, opset: int = 13) -> str:
     return output_path
 
 
+def convert_saved_model_to_onnx(saved_model_dir: str, output_path: str, opset: int = 17) -> str:
+    """Convert TensorFlow SavedModel to ONNX format using tf2onnx CLI.
+
+    Works with native TensorFlow SavedModels. Note that JAX-based models
+    exported via jax2tf (like Google Perch v2) contain XlaCallModule ops
+    that tf2onnx cannot decompose. For those, convert from TFLite instead,
+    or use a pre-converted ONNX model and run optimize.py on it directly.
+    """
+    cmd = [
+        sys.executable,
+        "-m",
+        "tf2onnx.convert",
+        "--saved-model",
+        saved_model_dir,
+        "--output",
+        output_path,
+        "--opset",
+        str(opset),
+    ]
+
+    print(f"  Running: {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"tf2onnx SavedModel conversion failed with exit code {result.returncode}:\n{result.stderr}"
+        )
+
+    return output_path
+
+
 def convert_tflite_to_onnx(tflite_path: str, output_path: str, opset: int = 17) -> str:
     """Convert TFLite model to ONNX format using tf2onnx CLI."""
-    import subprocess
-    import sys
-
     cmd = [
         sys.executable,
         "-m",
@@ -138,7 +169,7 @@ def convert_tflite_to_onnx(tflite_path: str, output_path: str, opset: int = 17) 
         output_path,
         "--opset",
         str(opset),
-        "--continue_on_error",  # Handle numpy 2.0 compatibility
+        "--continue_on_error",
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -204,21 +235,86 @@ def verify_onnx(onnx_path: str, input_shape: tuple) -> bool:
         return False
 
 
+def verify_onnx_multi_output(onnx_path: str) -> bool:
+    """Verify ONNX model with potentially multiple inputs/outputs."""
+    import numpy as np
+    import onnx
+
+    try:
+        model = onnx.load(onnx_path)
+        onnx.checker.check_model(model)
+
+        print(f"  Model is valid (opset {model.opset_import[0].version})")
+
+        for inp in model.graph.input:
+            shape = [
+                d.dim_value if d.dim_value > 0 else "?" for d in inp.type.tensor_type.shape.dim
+            ]
+            print(f"  Input:  {inp.name}, shape={shape}")
+        for out in model.graph.output:
+            shape = [
+                d.dim_value if d.dim_value > 0 else "?" for d in out.type.tensor_type.shape.dim
+            ]
+            print(f"  Output: {out.name}, shape={shape}")
+
+        # Count ops
+        from collections import Counter
+
+        ops = Counter(node.op_type for node in model.graph.node)
+        print(f"  Nodes: {len(model.graph.node)} total, {len(ops)} unique op types")
+        for op, count in ops.most_common(10):
+            print(f"    {op}: {count}")
+
+        # Try inference
+        try:
+            import onnxruntime as ort
+
+            session = ort.InferenceSession(onnx_path)
+            feed = {}
+            for inp in session.get_inputs():
+                shape = [1 if d is None or isinstance(d, str) else d for d in inp.shape]
+                feed[inp.name] = np.array(np.random.randn(*shape), dtype=np.float32)
+            outputs = session.run(None, feed)
+            for i, out in enumerate(outputs):
+                name = session.get_outputs()[i].name
+                print(f"  Output {i} ({name}): shape={out.shape}")
+        except ImportError:
+            print("  onnxruntime not installed, skipping inference test")
+
+        return True
+    except Exception as e:
+        print(f"  Verification failed: {e}")
+        return False
+
+
+def is_saved_model_dir(path: Path) -> bool:
+    """Check if a path is a TensorFlow SavedModel directory."""
+    if not path.is_dir():
+        return False
+    return (path / "saved_model.pb").exists()
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert Keras/TFLite model to TFLite and ONNX formats"
+        description="Convert Keras/TFLite/SavedModel to TFLite and ONNX formats"
     )
     parser.add_argument(
         "--input",
         "-i",
         required=True,
-        help="Input model path (.keras or .tflite)",
+        help="Input model path (.keras, .tflite, or SavedModel directory)",
     )
     parser.add_argument(
         "--output-dir",
         "-o",
         default=".",
         help="Output directory for converted models (default: current directory)",
+    )
+    parser.add_argument(
+        "--name",
+        "-n",
+        default=None,
+        help="Output model name (default: derived from input)",
     )
     parser.add_argument(
         "--no-optimize",
@@ -239,7 +335,7 @@ def main():
     parser.add_argument(
         "--onnx-only",
         action="store_true",
-        help="Only convert to ONNX (for TFLite input)",
+        help="Only convert to ONNX (for TFLite or SavedModel input)",
     )
     parser.add_argument(
         "--unsafe-fallback",
@@ -258,10 +354,46 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate output paths
-    model_name = input_path.stem
+    # Determine model name
+    if args.name:
+        model_name = args.name
+    elif input_path.is_dir():
+        model_name = input_path.name
+    else:
+        model_name = input_path.stem
+
     tflite_path = output_dir / f"{model_name}.tflite"
     onnx_path = output_dir / f"{model_name}.onnx"
+
+    # Handle SavedModel directory input
+    if is_saved_model_dir(input_path):
+        print(f"Input is TensorFlow SavedModel: {input_path}")
+
+        # List assets if present
+        assets_dir = input_path / "assets"
+        if assets_dir.exists():
+            for f in sorted(assets_dir.iterdir()):
+                if not f.name.startswith("."):
+                    print(f"  Asset: {f.name} ({f.stat().st_size / 1024:.1f} KB)")
+
+        print(f"\nConverting SavedModel to ONNX: {onnx_path}")
+        try:
+            convert_saved_model_to_onnx(str(input_path), str(onnx_path), opset=args.opset)
+            onnx_size = onnx_path.stat().st_size / (1024 * 1024)
+            print(f"  ONNX model saved ({onnx_size:.2f} MB)")
+        except Exception as e:
+            print(f"  ONNX conversion failed: {e}")
+            return 1
+
+        if not args.skip_verify:
+            print("  Verifying ONNX model...")
+            if not verify_onnx_multi_output(str(onnx_path)):
+                print("  Error: ONNX model verification failed")
+                return 1
+
+        print("\nConversion complete!")
+        print(f"  ONNX: {onnx_path}")
+        return 0
 
     # Handle TFLite input
     if input_path.suffix == ".tflite":

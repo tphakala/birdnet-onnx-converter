@@ -719,20 +719,42 @@ def convert_int32_to_int64(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int
 
 
 def rename_io(model: onnx.ModelProto) -> onnx.ModelProto:
-    """Rename input/output to standard names."""
-    if model.graph.input:
-        old_name = model.graph.input[0].name
-        new_name = "input"
-        model.graph.input[0].name = new_name
-        for node in model.graph.node:
-            node.input[:] = [new_name if x == old_name else x for x in node.input]
+    """Rename input/output to standard names.
 
-    if model.graph.output:
-        old_name = model.graph.output[0].name
-        new_name = "output"
-        model.graph.output[0].name = new_name
-        for node in model.graph.node:
-            node.output[:] = [new_name if x == old_name else x for x in node.output]
+    For single-output models (BirdNET): renames to "input" / "output".
+    For multi-output models (Perch v2): renames input to "inputs" and
+    preserves existing output names (embedding, spatial_embedding,
+    spectrogram, label) since they carry semantic meaning.
+    """
+    num_outputs = len(model.graph.output)
+
+    if num_outputs <= 2:
+        # BirdNET-style: single input, one or two outputs
+        if model.graph.input:
+            old_name = model.graph.input[0].name
+            new_name = "input"
+            if old_name != new_name:
+                model.graph.input[0].name = new_name
+                for node in model.graph.node:
+                    node.input[:] = [new_name if x == old_name else x for x in node.input]
+
+        if model.graph.output:
+            old_name = model.graph.output[0].name
+            new_name = "output"
+            if old_name != new_name:
+                model.graph.output[0].name = new_name
+                for node in model.graph.node:
+                    node.output[:] = [new_name if x == old_name else x for x in node.output]
+    else:
+        # Multi-output model (Perch v2): rename input only, keep output names
+        if model.graph.input:
+            old_name = model.graph.input[0].name
+            new_name = "inputs"
+            if old_name != new_name:
+                model.graph.input[0].name = new_name
+                for node in model.graph.node:
+                    node.input[:] = [new_name if x == old_name else x for x in node.input]
+        print(f"  Multi-output model ({num_outputs} outputs), preserving output names")
 
     return model
 
@@ -926,6 +948,42 @@ def fix_split_nodes(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     return model, fixes
 
 
+def prune_outputs(model: onnx.ModelProto, keep_names: list[str]) -> tuple[onnx.ModelProto, int]:
+    """Remove graph outputs not in keep_names and prune dead nodes.
+
+    For Perch v2, the model has 4 outputs: embedding, spatial_embedding,
+    spectrogram, label. If only embedding and label are needed, pruning
+    spatial_embedding and spectrogram can eliminate compute for those branches.
+    """
+    all_output_names = [out.name for out in model.graph.output]
+
+    # Validate that all requested names exist in the model
+    unknown = [name for name in keep_names if name not in all_output_names]
+    if unknown:
+        print(f"  Warning: unknown output names: {unknown}")
+        print(f"  Available outputs: {all_output_names}")
+        return model, 0
+
+    to_remove = [name for name in all_output_names if name not in keep_names]
+
+    if not to_remove:
+        print("  No outputs to prune")
+        return model, 0
+
+    # Remove unwanted outputs from the graph
+    outputs_to_keep = [out for out in model.graph.output if out.name in keep_names]
+    del model.graph.output[:]
+    model.graph.output.extend(outputs_to_keep)
+
+    print(f"  Pruned outputs: {to_remove}")
+    print(f"  Kept outputs: {[out.name for out in model.graph.output]}")
+
+    # Run dead code elimination to remove nodes that only fed pruned outputs
+    model, dead_removed = remove_dead_code(model)
+
+    return model, len(to_remove)
+
+
 def count_ops(model: onnx.ModelProto) -> dict[str, int]:
     """Count operations in a model."""
     from collections import Counter
@@ -1009,8 +1067,18 @@ def quantize_to_int8_arm(model_path: str, output_path: str) -> bool:
         return False
 
 
-def optimize_model(input_path: str) -> Optional[onnx.ModelProto]:
-    """Main optimization pipeline. Returns the optimized FP32 model."""
+def optimize_model(
+    input_path: str,
+    prune_output_names: Optional[list[str]] = None,
+    perch_mode: bool = False,
+) -> Optional[onnx.ModelProto]:
+    """Main optimization pipeline. Returns the optimized FP32 model.
+
+    Args:
+        input_path: Path to the ONNX model file.
+        prune_output_names: If set, keep only these outputs and prune the rest.
+        perch_mode: If True, use Perch-specific naming and graph settings.
+    """
 
     print(f"Loading model: {input_path}")
     model = onnx.load(input_path)
@@ -1070,27 +1138,39 @@ def optimize_model(input_path: str) -> Optional[onnx.ModelProto]:
     model = optimize_with_onnxscript(model, remove_casts=False)
     model = optimize_with_onnxslim(model)
 
-    # Step 10: Remove dead code (orphaned nodes from replacements)
-    print("\n[10/13] Removing dead code...")
+    # Step 10: Prune unused outputs (if requested)
+    if prune_output_names:
+        print(f"\n[10/14] Pruning outputs to: {prune_output_names}...")
+        model, pruned = prune_outputs(model, prune_output_names)
+        print(f"  Pruned: {pruned} outputs removed")
+    else:
+        print("\n[10/14] Output pruning: skipped (no --prune-outputs)")
+
+    # Step 11: Remove dead code (orphaned nodes from replacements and pruning)
+    print("\n[11/14] Removing dead code...")
     model, dead_removed = remove_dead_code(model)
     print(f"  Removed: {dead_removed} dead nodes")
 
-    # Step 11: Fix Split nodes (remove zero-size outputs)
-    print("\n[11/13] Fixing Split nodes...")
+    # Step 12: Fix Split nodes (remove zero-size outputs)
+    print("\n[12/14] Fixing Split nodes...")
     model, split_fixed = fix_split_nodes(model)
     print(f"  Fixed: {split_fixed}")
 
-    # Step 12: Set dynamic batch
-    print("\n[12/13] Setting dynamic batch size...")
+    # Step 13: Set dynamic batch
+    print("\n[13/14] Setting dynamic batch size...")
     model = set_dynamic_batch(model)
     print("  Done")
 
-    # Step 13: Finalize
-    print("\n[13/13] Finalizing model...")
+    # Step 14: Finalize
+    print("\n[14/14] Finalizing model...")
     model = rename_io(model)
     model.ir_version = 9
-    model.producer_name = "birdnet-onnx-optimizer"
-    model.graph.name = "BirdNET"
+    if perch_mode:
+        model.producer_name = "perch-onnx-optimizer"
+        model.graph.name = "Perch"
+    else:
+        model.producer_name = "birdnet-onnx-optimizer"
+        model.graph.name = "BirdNET"
     print("  Done")
 
     # Final stats
@@ -1140,6 +1220,17 @@ def main():
     parser.add_argument(
         "--int8-arm", action="store_true", help="Also create ARM-compatible INT8 model"
     )
+    parser.add_argument(
+        "--prune-outputs",
+        type=str,
+        default=None,
+        help="Comma-separated list of output names to keep (prune all others)",
+    )
+    parser.add_argument(
+        "--perch",
+        action="store_true",
+        help="Perch v2 mode: preserve multi-output naming and set graph name to Perch",
+    )
     args = parser.parse_args()
 
     # Determine output paths
@@ -1152,8 +1243,13 @@ def main():
     int8_path = f"{output_base}_int8.onnx"
     int8_arm_path = f"{output_base}_int8_arm.onnx"
 
+    # Parse prune list
+    prune_names = None
+    if args.prune_outputs:
+        prune_names = [s.strip() for s in args.prune_outputs.split(",")]
+
     # Run optimization pipeline
-    model = optimize_model(args.input)
+    model = optimize_model(args.input, prune_output_names=prune_names, perch_mode=args.perch)
     if model is None:
         print("Optimization failed!")
         return 1
