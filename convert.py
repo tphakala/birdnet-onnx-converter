@@ -247,10 +247,14 @@ def verify_onnx_multi_output(onnx_path: str) -> bool:
         print(f"  Model is valid (opset {model.opset_import[0].version})")
 
         for inp in model.graph.input:
-            shape = [d.dim_value if d.dim_value > 0 else "?" for d in inp.type.tensor_type.shape.dim]
+            shape = [
+                d.dim_value if d.dim_value > 0 else "?" for d in inp.type.tensor_type.shape.dim
+            ]
             print(f"  Input:  {inp.name}, shape={shape}")
         for out in model.graph.output:
-            shape = [d.dim_value if d.dim_value > 0 else "?" for d in out.type.tensor_type.shape.dim]
+            shape = [
+                d.dim_value if d.dim_value > 0 else "?" for d in out.type.tensor_type.shape.dim
+            ]
             print(f"  Output: {out.name}, shape={shape}")
 
         # Count ops
@@ -268,7 +272,7 @@ def verify_onnx_multi_output(onnx_path: str) -> bool:
             session = ort.InferenceSession(onnx_path)
             input_info = session.get_inputs()[0]
             shape = [1 if d is None or isinstance(d, str) else d for d in input_info.shape]
-            test_input = np.random.randn(*shape).astype(np.float32)
+            test_input = np.random.randn(*shape).astype(np.float32)  # type: ignore[union-attr]
             outputs = session.run(None, {input_info.name: test_input})
             for i, out in enumerate(outputs):
                 name = session.get_outputs()[i].name
