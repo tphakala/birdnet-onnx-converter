@@ -270,10 +270,11 @@ def verify_onnx_multi_output(onnx_path: str) -> bool:
             import onnxruntime as ort
 
             session = ort.InferenceSession(onnx_path)
-            input_info = session.get_inputs()[0]
-            shape = [1 if d is None or isinstance(d, str) else d for d in input_info.shape]
-            test_input = np.array(np.random.randn(*shape), dtype=np.float32)
-            outputs = session.run(None, {input_info.name: test_input})
+            feed = {}
+            for inp in session.get_inputs():
+                shape = [1 if d is None or isinstance(d, str) else d for d in inp.shape]
+                feed[inp.name] = np.array(np.random.randn(*shape), dtype=np.float32)
+            outputs = session.run(None, feed)
             for i, out in enumerate(outputs):
                 name = session.get_outputs()[i].name
                 print(f"  Output {i} ({name}): shape={out.shape}")
@@ -386,7 +387,9 @@ def main():
 
         if not args.skip_verify:
             print("  Verifying ONNX model...")
-            verify_onnx_multi_output(str(onnx_path))
+            if not verify_onnx_multi_output(str(onnx_path)):
+                print("  Error: ONNX model verification failed")
+                return 1
 
         print("\nConversion complete!")
         print(f"  ONNX: {onnx_path}")

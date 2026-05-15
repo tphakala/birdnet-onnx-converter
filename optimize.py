@@ -733,16 +733,18 @@ def rename_io(model: onnx.ModelProto) -> onnx.ModelProto:
         if model.graph.input:
             old_name = model.graph.input[0].name
             new_name = "input"
-            model.graph.input[0].name = new_name
-            for node in model.graph.node:
-                node.input[:] = [new_name if x == old_name else x for x in node.input]
+            if old_name != new_name:
+                model.graph.input[0].name = new_name
+                for node in model.graph.node:
+                    node.input[:] = [new_name if x == old_name else x for x in node.input]
 
         if model.graph.output:
             old_name = model.graph.output[0].name
             new_name = "output"
-            model.graph.output[0].name = new_name
-            for node in model.graph.node:
-                node.output[:] = [new_name if x == old_name else x for x in node.output]
+            if old_name != new_name:
+                model.graph.output[0].name = new_name
+                for node in model.graph.node:
+                    node.output[:] = [new_name if x == old_name else x for x in node.output]
     else:
         # Multi-output model (Perch v2): rename input only, keep output names
         if model.graph.input:
@@ -954,6 +956,14 @@ def prune_outputs(model: onnx.ModelProto, keep_names: list[str]) -> tuple[onnx.M
     spatial_embedding and spectrogram can eliminate compute for those branches.
     """
     all_output_names = [out.name for out in model.graph.output]
+
+    # Validate that all requested names exist in the model
+    unknown = [name for name in keep_names if name not in all_output_names]
+    if unknown:
+        print(f"  Warning: unknown output names: {unknown}")
+        print(f"  Available outputs: {all_output_names}")
+        return model, 0
+
     to_remove = [name for name in all_output_names if name not in keep_names]
 
     if not to_remove:
