@@ -272,7 +272,7 @@ def verify_onnx_multi_output(onnx_path: str) -> bool:
             session = ort.InferenceSession(onnx_path)
             input_info = session.get_inputs()[0]
             shape = [1 if d is None or isinstance(d, str) else d for d in input_info.shape]
-            test_input = np.random.randn(*shape).astype(np.float32)  # type: ignore[union-attr]
+            test_input = np.array(np.random.randn(*shape), dtype=np.float32)
             outputs = session.run(None, {input_info.name: test_input})
             for i, out in enumerate(outputs):
                 name = session.get_outputs()[i].name
