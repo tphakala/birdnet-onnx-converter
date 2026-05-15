@@ -4,8 +4,10 @@ Convert and optimize BirdNET models for ONNX Runtime inference on various platfo
 
 ## Features
 
-- **TFLite to ONNX conversion** - Convert BirdNET TFLite models to ONNX format
-- **GPU optimization** - Replace unsupported ops (RFFT2D, ReverseSequence) with GPU-friendly alternatives
+- **Multiple input formats** - Convert from Keras (.keras), TFLite (.tflite), or TensorFlow SavedModel directories
+- **GPU optimization** - Replace unsupported ops (RFFT2D, ReverseSequence, DFT) with GPU-friendly alternatives
+- **Multi-output model support** - Handle models like Google Perch v2 with multiple outputs
+- **Output pruning** - Strip unused model outputs to reduce compute
 - **Multiple precision formats**:
   - FP32 - Standard precision for GPU/desktop
   - FP16 - Half precision for devices with FP16 support (RPi 5, modern GPUs)
@@ -42,20 +44,35 @@ pip install onnx-simplifier
 
 ## Usage
 
-### Step 1: Convert TFLite to ONNX
+### Step 1: Convert to ONNX
 
 ```bash
+# From TFLite
 python convert.py --input BirdNET_Model.tflite --output-dir ./ --onnx-only
+
+# From TensorFlow SavedModel directory
+python convert.py --input /path/to/saved_model/ --output-dir ./ --name my_model
 ```
+
+Note: JAX-based SavedModels (like Google Perch v2) contain `XlaCallModule` ops that
+tf2onnx cannot decompose. For those models, convert from TFLite instead, or use a
+pre-converted ONNX model and run `optimize.py` directly.
 
 ### Step 2: Optimize ONNX Model
 
 ```bash
-# Output all formats (FP32, FP16)
+# BirdNET: output all formats (FP32, FP16)
 python optimize.py --input BirdNET_Model.onnx --output BirdNET
 
-# Output only FP32
+# BirdNET: output only FP32
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp32-only
+
+# Perch v2: preserve multi-output naming, include ARM-optimized INT8
+python optimize.py --input perch_v2.onnx --output perch_v2 --perch --int8-arm
+
+# Perch v2: prune unused outputs (keep only embeddings and labels)
+python optimize.py --input perch_v2.onnx --output perch_v2_lite --perch \
+    --prune-outputs embedding,label
 ```
 
 ### Output Files
@@ -84,6 +101,7 @@ The optimizer applies the following transformations:
 This tool supports conversion and optimization of:
 
 - **Official BirdNET models** - Download from [Zenodo](https://zenodo.org/records/15050749) (v2.4 with 6522 species)
+- **Google Perch v2** - Bird vocalization classifier with ~14,795 species ([Kaggle](https://www.kaggle.com/models/google/bird-vocalization-classifier/))
 - **Custom classifiers** - Models trained with [BirdNET Analyzer](https://github.com/birdnet-team/BirdNET-Analyzer) for additional species or regional variants
 - **Any BirdNET variant** - Models using the same backbone architecture
 
