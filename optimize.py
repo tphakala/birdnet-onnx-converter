@@ -1013,8 +1013,9 @@ def fix_fp16_type_mismatches(model: onnx.ModelProto) -> int:
         if to_type == onnx.TensorProto.FLOAT:
             cast_fp32_output_to_fp16_input[node.output[0]] = node.input[0]
 
-    # Build initializer type map
+    # Build type maps for initializers and intermediate tensors
     init_types = {init.name: init.data_type for init in model.graph.initializer}
+    vi_types = {vi.name: vi.type.tensor_type.elem_type for vi in model.graph.value_info}
 
     fixed = 0
 
@@ -1035,6 +1036,8 @@ def fix_fp16_type_mismatches(model: onnx.ModelProto) -> int:
                     continue
                 if other_inp in init_types:
                     other_types.add(init_types[other_inp])
+                elif other_inp in vi_types:
+                    other_types.add(vi_types[other_inp])
             if onnx.TensorProto.FLOAT16 in other_types:
                 pre_cast = cast_fp32_output_to_fp16_input[inp]
                 new_inputs[i] = pre_cast
