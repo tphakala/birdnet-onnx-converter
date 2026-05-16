@@ -991,11 +991,95 @@ def count_ops(model: onnx.ModelProto) -> dict[str, int]:
     return dict(Counter(node.op_type for node in model.graph.node))
 
 
+def fix_fp16_type_mismatches(model: onnx.ModelProto) -> int:
+    """Fix type mismatches introduced by keep_io_types Cast insertion.
+
+    After FP16 conversion with keep_io_types=True, the converter inserts Cast
+    nodes (fp16->fp32) at I/O boundaries. But if a Cast output is also consumed
+    by internal nodes (like MatMul) whose other inputs are fp16, we get a type
+    mismatch. Fix by rewiring internal consumers to use the pre-Cast fp16 tensor.
+    Also fix value_info entries that disagree with Cast output types.
+    """
+    # Map Cast(to=FLOAT) outputs to their fp16 inputs
+    cast_fp32_output_to_fp16_input: dict[str, str] = {}
+    for node in model.graph.node:
+        if node.op_type != "Cast":
+            continue
+        to_type = None
+        for attr in node.attribute:
+            if attr.name == "to":
+                to_type = attr.i
+                break
+        if to_type == onnx.TensorProto.FLOAT:
+            cast_fp32_output_to_fp16_input[node.output[0]] = node.input[0]
+
+    # Build initializer type map
+    init_types = {init.name: init.data_type for init in model.graph.initializer}
+
+    fixed = 0
+
+    # Rewire internal nodes that consume a Cast(to=FLOAT) output alongside fp16 inputs
+    for node in model.graph.node:
+        if node.op_type == "Cast":
+            continue
+
+        new_inputs = list(node.input)
+        changed = False
+
+        for i, inp in enumerate(new_inputs):
+            if inp not in cast_fp32_output_to_fp16_input:
+                continue
+            other_types = set()
+            for j, other_inp in enumerate(new_inputs):
+                if j == i:
+                    continue
+                if other_inp in init_types:
+                    other_types.add(init_types[other_inp])
+            if onnx.TensorProto.FLOAT16 in other_types:
+                pre_cast = cast_fp32_output_to_fp16_input[inp]
+                new_inputs[i] = pre_cast
+                changed = True
+                print(f"    Rewired {node.name} ({node.op_type}): {inp} -> {pre_cast}")
+                fixed += 1
+
+        if changed:
+            del node.input[:]
+            node.input.extend(new_inputs)
+
+    # Fix value_info entries that conflict with Cast output types
+    cast_output_types: dict[str, int] = {}
+    for node in model.graph.node:
+        if node.op_type != "Cast":
+            continue
+        to_type = None
+        for attr in node.attribute:
+            if attr.name == "to":
+                to_type = attr.i
+                break
+        if to_type is not None:
+            for out_name in node.output:
+                cast_output_types[out_name] = to_type
+
+    for vi in model.graph.value_info:
+        if vi.name in cast_output_types:
+            expected_type = cast_output_types[vi.name]
+            actual_type = vi.type.tensor_type.elem_type
+            if actual_type != expected_type:
+                old_name = onnx.TensorProto.DataType.Name(actual_type)
+                new_name = onnx.TensorProto.DataType.Name(expected_type)
+                vi.type.tensor_type.elem_type = expected_type
+                print(f"    Fixed value_info: {vi.name} ({old_name} -> {new_name})")
+                fixed += 1
+
+    return fixed
+
+
 def convert_to_fp16(model: onnx.ModelProto) -> Optional[onnx.ModelProto]:
     """Convert FP32 model to FP16 for devices with FP16 hardware support.
 
-    Uses onnxconverter-common for reliable FP16 conversion.
-    Note: op_block_list removed as it causes type mismatch issues.
+    Uses onnxconverter-common for reliable FP16 conversion, then fixes any
+    remaining type mismatches from keep_io_types Cast insertion on multi-output
+    models.
     """
     try:
         from onnxconverter_common import float16
@@ -1005,7 +1089,6 @@ def convert_to_fp16(model: onnx.ModelProto) -> Optional[onnx.ModelProto]:
             keep_io_types=True,
         )
         print("  FP16 conversion succeeded")
-        return model_fp16  # type: ignore[no-any-return]
     except ImportError:
         print("  Warning: onnxconverter-common not installed, trying onnxruntime")
         try:
@@ -1013,13 +1096,18 @@ def convert_to_fp16(model: onnx.ModelProto) -> Optional[onnx.ModelProto]:
 
             model_fp16 = float16.convert_float_to_float16(model, keep_io_types=True)
             print("  FP16 conversion succeeded (via onnxruntime)")
-            return model_fp16  # type: ignore[no-any-return]
         except Exception as e:
             print(f"  FP16 conversion failed: {e}")
             return None
     except Exception as e:
         print(f"  FP16 conversion failed: {e}")
         return None
+
+    fixed = fix_fp16_type_mismatches(model_fp16)
+    if fixed > 0:
+        print(f"  Fixed {fixed} type mismatch(es) from keep_io_types")
+
+    return model_fp16  # type: ignore[no-any-return]
 
 
 def quantize_to_int8_dynamic(model_path: str, output_path: str) -> bool:
