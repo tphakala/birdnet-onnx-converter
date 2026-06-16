@@ -446,7 +446,9 @@ def test_prepare_for_quantization_excludes_preprocessing_and_refreshes(tmp_path:
     refreshed = onnx.load(str(prepared))
     onnx.checker.check_model(refreshed)
     vi = {v.name: v.type.tensor_type.elem_type for v in refreshed.graph.value_info}
-    assert vi.get("spec") != onnx.TensorProto.INT64, "stale value_info must be cleared/re-inferred"
+    # The stale INT64 annotation must be replaced by the correct re-inferred FLOAT,
+    # proving value_info was cleared AND re-inferred (not merely dropped).
+    assert vi.get("spec") == onnx.TensorProto.FLOAT, "stale value_info must be re-inferred to FLOAT"
 
 
 def test_int8_keeps_spectrogram_matmuls_full_precision(optimized_fp32_path: Path, tmp_path: Path):
@@ -464,6 +466,37 @@ def test_int8_keeps_spectrogram_matmuls_full_precision(optimized_fp32_path: Path
     int8_path = tmp_path / "int8.onnx"
     assert quantize_to_int8_dynamic(str(optimized_fp32_path), str(int8_path))
     assert not (tmp_path / "int8.onnx.prep.onnx").exists(), "temp prepared model must be removed"
+
+    quantized = onnx.load(str(int8_path))
+    init_types = {i.name: i.data_type for i in quantized.graph.initializer}
+    by_name = {n.name: n for n in quantized.graph.node}
+    for name in spectrogram_matmuls:
+        node = by_name[name]
+        assert node.op_type == "MatMul", f"{name} was quantized (op={node.op_type})"
+        assert any(init_types.get(i) == onnx.TensorProto.FLOAT for i in node.input), (
+            f"{name} weights must remain FP32"
+        )
+
+
+def test_int8_arm_keeps_spectrogram_matmuls_full_precision(
+    optimized_fp32_path: Path, tmp_path: Path
+):
+    """The ARM INT8 path (MatMul-only) must also leave the spectrogram MatMuls as
+    float MatMul and clean up its temporary prepared model."""
+    from optimize import find_preprocessing_node_names, quantize_to_int8_arm
+
+    base = onnx.load(str(optimized_fp32_path))
+    preprocessing = find_preprocessing_node_names(base)
+    spectrogram_matmuls = {
+        n.name for n in base.graph.node if n.op_type == "MatMul" and n.name in preprocessing
+    }
+    assert spectrogram_matmuls, "expected spectrogram MatMuls in the front-end"
+
+    int8_path = tmp_path / "int8_arm.onnx"
+    assert quantize_to_int8_arm(str(optimized_fp32_path), str(int8_path))
+    assert not (tmp_path / "int8_arm.onnx.prep.onnx").exists(), (
+        "temp prepared model must be removed"
+    )
 
     quantized = onnx.load(str(int8_path))
     init_types = {i.name: i.data_type for i in quantized.graph.initializer}

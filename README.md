@@ -88,6 +88,12 @@ python optimize.py --input perch_v2.onnx --output perch_v2_lite --perch \
 | ---- | ----------- | --------------- |
 | `*_fp32.onnx` | Full precision | GPU (CUDA/TensorRT), Desktop CPU |
 | `*_fp16.onnx` | Half precision | RPi 5, Modern GPUs |
+| `*_int8.onnx` | INT8 dynamic quantization | Low-power x86 CPU |
+| `*_int8_arm.onnx` | INT8, MatMul only (`--int8-arm`) | RPi 3/4, ARM CPU |
+
+For both FP16 and INT8, the spectrogram preprocessing front-end (STFT/mel
+MatMuls and normalization) is kept in full precision to preserve accuracy;
+only the CNN backbone is reduced.
 
 ## Key Optimizations
 
@@ -97,7 +103,7 @@ The optimizer applies the following transformations:
 2. **ReverseSequence → Slice** - Replaces with negative-stride slice operation
 3. **GlobalAveragePool + Squeeze → ReduceMean** - Combines into single operation
 4. **Transpose fusion** - Merges consecutive transpose operations
-5. **Cast removal** - Removes all Cast nodes via onnxscript rewriter for proper type propagation
+5. **Cast removal** - Removes redundant/identity Cast nodes for proper type propagation
 6. **INT32 → INT64 conversion** - Converts integer initializers to INT64 for better compatibility
 7. **Graph optimization** - Uses onnxscript optimizer and onnxslim for further optimization
 8. **Split node fixing** - Removes zero-size outputs from Split nodes
