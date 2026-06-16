@@ -1247,8 +1247,55 @@ def find_preprocessing_node_names(model: onnx.ModelProto) -> set[str]:
     return names
 
 
+def find_swish_node_names(model: onnx.ModelProto) -> set[str]:
+    """Return the node names of sigmoid-gated activations (Swish/SiLU: x*sigmoid(x),
+    and SE-style x*sigmoid(gate)).
+
+    These are kept in FP32 during FP16 conversion (CLI --fp16-keep-activations-fp32)
+    so ONNX Runtime's CPU EP can fuse its FP32 QuickGelu kernel; an all-FP16 graph
+    runs them unfused and is much slower on ARM/CPU. Both the Mul and the Sigmoid
+    feeding it are returned so the fusable pair stays FP32 together.
+
+    Blocks by node name, not by the Mul/Sigmoid op types, so unrelated multiplies
+    (e.g. batchnorm scale) are NOT forced to FP32. Any unnamed activation node is
+    given a unique name in place so the name-based block list cannot miss it.
+    """
+    sigmoid_by_output: dict[str, onnx.NodeProto] = {
+        node.output[0]: node
+        for node in model.graph.node
+        if node.op_type == "Sigmoid" and node.output and node.output[0]
+    }
+
+    used = {node.name for node in model.graph.node if node.name}
+
+    def ensure_name(node: onnx.NodeProto, hint: str) -> str:
+        if not node.name:
+            name = f"_fp16_swish_{hint}"
+            suffix = 1
+            while name in used:
+                suffix += 1
+                name = f"_fp16_swish_{hint}{suffix}"
+            node.name = name
+            used.add(name)
+        return node.name
+
+    names: set[str] = set()
+    for node in model.graph.node:
+        if node.op_type != "Mul":
+            continue
+        gates = [inp for inp in node.input if inp in sigmoid_by_output]
+        if not gates:
+            continue
+        names.add(ensure_name(node, node.output[0] if node.output else "mul"))
+        for gate in gates:
+            names.add(ensure_name(sigmoid_by_output[gate], gate))
+    return names
+
+
 def convert_to_fp16(
-    model: onnx.ModelProto, keep_preprocessing_fp32: bool = True
+    model: onnx.ModelProto,
+    keep_preprocessing_fp32: bool = True,
+    keep_activations_fp32: bool = False,
 ) -> Optional[onnx.ModelProto]:
     """Convert FP32 model to FP16 for devices with FP16 hardware support.
 
@@ -1263,6 +1310,13 @@ def convert_to_fp16(
     converted to FP16. Pass keep_preprocessing_fp32=False (CLI --fp16-full) to
     convert the entire graph to FP16.
 
+    When keep_activations_fp32 is True (CLI --fp16-keep-activations-fp32), the
+    sigmoid-gated Swish/SiLU activation nodes (found by name, not op type) are
+    additionally kept in FP32 so ONNX Runtime's CPU EP can fuse them into its FP32
+    QuickGelu kernel; the conv/matmul weights stay FP16. This recovers most of the
+    FP16 latency on ARM/CPU at a small runtime-RAM cost (activation buffers stay
+    FP32).
+
     Note: the input model is mutated in place by the decouple step. Callers that
     still need the original FP32 graph afterward should save or copy it first
     (main() saves the FP32 model to disk before calling this).
@@ -1271,22 +1325,33 @@ def convert_to_fp16(
     if decoupled > 0:
         print(f"  Decoupled {decoupled} dual-role output(s) before FP16 conversion")
 
-    node_block_list = None
+    block_names: set[str] = set()
     if keep_preprocessing_fp32:
         preprocessing = find_preprocessing_node_names(model)
         if preprocessing:
-            node_block_list = sorted(preprocessing)
-            print(f"  Keeping {len(node_block_list)} preprocessing node(s) in FP32")
+            block_names |= preprocessing
+            print(f"  Keeping {len(preprocessing)} preprocessing node(s) in FP32")
         else:
             print("  No preprocessing front-end identified; converting the full graph to FP16")
+
+    if keep_activations_fp32:
+        swish = find_swish_node_names(model)
+        if swish:
+            block_names |= swish
+            print(
+                f"  Keeping {len(swish)} Swish/SiLU activation node(s) in FP32 so "
+                "ORT's CPU EP can fuse QuickGelu"
+            )
+        else:
+            print("  No Swish/SiLU activations identified")
+
+    node_block_list = sorted(block_names) if block_names else None
 
     try:
         from onnxconverter_common import float16
 
         model_fp16 = float16.convert_float_to_float16(
-            model,
-            keep_io_types=True,
-            node_block_list=node_block_list,
+            model, keep_io_types=True, node_block_list=node_block_list
         )
         print("  FP16 conversion succeeded")
     except ImportError:
@@ -1588,6 +1653,13 @@ def main():
         help="Convert the entire graph to FP16, including spectrogram preprocessing "
         "(default keeps the preprocessing front-end in FP32 for accuracy)",
     )
+    parser.add_argument(
+        "--fp16-keep-activations-fp32",
+        action="store_true",
+        help="Keep Swish/SiLU activations (Sigmoid x Mul) in FP32 during FP16 "
+        "conversion so ONNX Runtime's CPU EP can fuse QuickGelu. Recovers most "
+        "FP16 latency on ARM/CPU (weights stay FP16); small runtime-RAM cost.",
+    )
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantization")
     parser.add_argument(
         "--int8-arm", action="store_true", help="Also create ARM-compatible INT8 model"
@@ -1649,7 +1721,11 @@ def main():
     # Convert to FP16
     if not args.no_fp16:
         print("\n[FP16] Converting to FP16...")
-        model_fp16 = convert_to_fp16(model, keep_preprocessing_fp32=not args.fp16_full)
+        model_fp16 = convert_to_fp16(
+            model,
+            keep_preprocessing_fp32=not args.fp16_full,
+            keep_activations_fp32=args.fp16_keep_activations_fp32,
+        )
         if model_fp16 is not None:
             print(f"[FP16] Saving: {fp16_path}")
             onnx.save(model_fp16, fp16_path)

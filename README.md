@@ -13,7 +13,13 @@ Convert and optimize BirdNET models for ONNX Runtime inference on various platfo
   - FP16 - Half precision for devices with FP16 support (RPi 5, modern GPUs). The
     spectrogram preprocessing front-end (STFT/mel MatMuls and normalization) is
     kept in FP32 by default to preserve accuracy; pass `--fp16-full` to convert
-    the entire graph.
+    the entire graph. On ARM/CPU, `--fp16-keep-activations-fp32` keeps the
+    Swish/SiLU activations in FP32 so ONNX Runtime's CPU EP can fuse QuickGelu,
+    recovering most of the FP16 latency (weights stay FP16; small runtime-RAM cost).
+  - INT8 - Dynamic quantization for low-power CPUs (experimental; validate
+    accuracy before use). The spectrogram preprocessing is excluded so it stays
+    full precision. `--int8-arm` quantizes only MatMul ops (skipping Conv) to
+    avoid ConvInteger kernels that ARM ONNX Runtime builds do not support.
 
 ## Installation
 
@@ -64,15 +70,25 @@ pre-converted ONNX model and run `optimize.py` directly.
 ### Step 2: Optimize ONNX Model
 
 ```bash
-# BirdNET: output all formats (FP32, FP16)
+# BirdNET: output all formats (FP32, FP16, INT8)
 python optimize.py --input BirdNET_Model.onnx --output BirdNET
 
 # BirdNET: output only FP32
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp32-only
 
+# BirdNET: skip INT8 (FP32 + FP16 only)
+python optimize.py --input BirdNET_Model.onnx --output BirdNET --no-int8
+
+# BirdNET: also produce an ARM-friendly INT8 model (MatMul-only)
+python optimize.py --input BirdNET_Model.onnx --output BirdNET --int8-arm
+
 # FP16: convert the whole graph, including spectrogram preprocessing
 # (by default the preprocessing front-end is kept in FP32 for accuracy)
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-full
+
+# FP16: keep the Swish/SiLU activations (Sigmoid x Mul) in FP32 so ONNX Runtime's
+# CPU EP can fuse QuickGelu (much faster FP16 on ARM/CPU; weights stay FP16)
+python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-keep-activations-fp32
 
 # Perch v2: preserve multi-output naming, include ARM-optimized INT8
 python optimize.py --input perch_v2.onnx --output perch_v2 --perch --int8-arm
@@ -114,6 +130,20 @@ The optimizer applies the following transformations:
 7. **Graph optimization** - Uses onnxscript optimizer and onnxslim for further optimization
 8. **Split node fixing** - Removes zero-size outputs from Split nodes
 9. **Dead code elimination** - Removes orphaned nodes not contributing to output
+
+### Precision conversion safeguards
+
+When emitting reduced-precision variants, the converter protects the
+accuracy-critical spectrogram front-end:
+
+- **FP16 dual-role output decoupling** - Inserts an Identity boundary so the
+  `keep_io_types` Cast cannot leave mixed fp16/fp32 ops on multi-output models
+  (e.g. the v2.4 embeddings model); external output names are preserved.
+- **FP16 preprocessing protection** - Keeps the STFT/mel MatMuls and
+  normalization in FP32 (the CNN backbone goes FP16); `--fp16-full` opts out.
+- **INT8 preprocessing exclusion** - Excludes the spectrogram MatMuls from INT8
+  quantization and refreshes `value_info` before quantizing so tensor types are
+  classified correctly.
 
 ## Supported Models
 
