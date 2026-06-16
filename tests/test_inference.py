@@ -142,17 +142,28 @@ def test_fp32_inference_batch_sweep(optimized_fp32_path: Path):
     input_name = session.get_inputs()[0].name
     for batch in (1, 2, 3):
         dummy = np.zeros((batch, INPUT_LENGTH), dtype=np.float32)
-        output = session.run(None, {input_name: dummy})[0]
+        output = _resolve_output(session, session.run(None, {input_name: dummy}), "output")
         assert output.shape == (batch, EXPECTED_SPECIES_COUNT), (
             f"batch {batch} should yield {(batch, EXPECTED_SPECIES_COUNT)}, got {output.shape}"
         )
+
+
+def test_fp16_inference_batch_sweep(optimized_fp16_path: Path):
+    """The FP16 model's dynamic batch axis also works across batch sizes (the
+    FP16 path has its own keep_io_types boundary, so it is worth covering)."""
+    session = ort.InferenceSession(str(optimized_fp16_path), providers=["CPUExecutionProvider"])
+    input_name = session.get_inputs()[0].name
+    for batch in (1, 2):
+        dummy = np.zeros((batch, INPUT_LENGTH), dtype=np.float32)
+        output = _resolve_output(session, session.run(None, {input_name: dummy}), "output")
+        assert output.shape == (batch, EXPECTED_SPECIES_COUNT)
 
 
 def test_fp32_inference_on_audio(optimized_fp32_path: Path, audio_input):
     """The model runs on (deterministic) audio input and produces finite logits."""
     session = ort.InferenceSession(str(optimized_fp32_path), providers=["CPUExecutionProvider"])
     input_name = session.get_inputs()[0].name
-    output = session.run(None, {input_name: audio_input})[0]
+    output = _resolve_output(session, session.run(None, {input_name: audio_input}), "output")
     assert output.shape == (1, EXPECTED_SPECIES_COUNT)
     assert np.all(np.isfinite(output))
 

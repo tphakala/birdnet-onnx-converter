@@ -59,6 +59,10 @@ def audio_input(fixtures_dir: Path):
 
     Uses the real test audio when present, otherwise falls back to seeded noise
     so inference tests stay runnable and reproducible without the WAV asset.
+
+    Assumes 16-bit PCM at 48 kHz and does not resample (it pads/truncates to
+    144000 samples = 3 s). The array is session-scoped and shared; consumers must
+    not mutate it in place.
     """
     import wave
 
@@ -69,6 +73,7 @@ def audio_input(fixtures_dir: Path):
     if path.exists():
         with wave.open(str(path), "rb") as w:
             channels = w.getnchannels()
+            assert w.getsampwidth() == 2, "test audio must be 16-bit PCM"
             raw = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
         audio = raw.astype(np.float32) / 32768.0
         if channels > 1:
