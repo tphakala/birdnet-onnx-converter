@@ -1165,13 +1165,72 @@ def decouple_dual_role_outputs(model: onnx.ModelProto) -> int:
     return decoupled
 
 
-def convert_to_fp16(model: onnx.ModelProto) -> Optional[onnx.ModelProto]:
+def find_preprocessing_node_names(model: onnx.ModelProto) -> set[str]:
+    """Return the names of nodes that compute the spectrogram front-end.
+
+    The front-end is everything feeding the first backbone Conv: framing, the
+    STFT/RFFT and mel-filterbank MatMuls, the power and per-sample normalization
+    ops. These accumulate over long reductions and lose accuracy in FP16, so they
+    are kept in FP32 via node_block_list during conversion.
+
+    Block by node name (ancestors of the first Conv) rather than by op type:
+    ops such as ReduceMean and Mul also appear inside the CNN backbone (SE
+    blocks), which should stay FP16. Returns an empty set if the graph has no
+    Conv (the front-end cannot be located).
+    """
+    first_conv = next((n for n in model.graph.node if n.op_type == "Conv"), None)
+    if first_conv is None:
+        return set()
+
+    producer: dict[str, onnx.NodeProto] = {}
+    for node in model.graph.node:
+        for out in node.output:
+            if out:
+                producer[out] = node
+
+    initializers = {init.name for init in model.graph.initializer}
+    graph_inputs = {i.name for i in model.graph.input}
+
+    names: set[str] = set()
+    visited: set[str] = set()
+    # Walk backward from the Conv's data inputs (not the Conv itself, which stays
+    # FP16) collecting every ancestor node.
+    stack = [
+        inp
+        for inp in first_conv.input
+        if inp and inp not in initializers and inp not in graph_inputs
+    ]
+    while stack:
+        tensor = stack.pop()
+        if tensor in visited:
+            continue
+        visited.add(tensor)
+        node = producer.get(tensor)
+        if node is None:
+            continue
+        if node.name:
+            names.add(node.name)
+        for inp in node.input:
+            if inp and inp not in initializers and inp not in graph_inputs:
+                stack.append(inp)
+    return names
+
+
+def convert_to_fp16(
+    model: onnx.ModelProto, keep_preprocessing_fp32: bool = True
+) -> Optional[onnx.ModelProto]:
     """Convert FP32 model to FP16 for devices with FP16 hardware support.
 
     Decouples dual-role outputs first so keep_io_types Cast insertion cannot
     corrupt internal consumers, then uses onnxconverter-common for the FP16
     conversion. fix_fp16_type_mismatches is kept as a sentinel and should report
     zero rewires once decoupling has run.
+
+    When keep_preprocessing_fp32 is True (default), the spectrogram front-end
+    (STFT/mel MatMuls and normalization, everything feeding the first backbone
+    Conv) is kept in FP32 to preserve accuracy while the CNN backbone is still
+    converted to FP16. Pass keep_preprocessing_fp32=False (CLI --fp16-full) to
+    convert the entire graph to FP16.
 
     Note: the input model is mutated in place by the decouple step. Callers that
     still need the original FP32 graph afterward should save or copy it first
@@ -1181,12 +1240,22 @@ def convert_to_fp16(model: onnx.ModelProto) -> Optional[onnx.ModelProto]:
     if decoupled > 0:
         print(f"  Decoupled {decoupled} dual-role output(s) before FP16 conversion")
 
+    node_block_list = None
+    if keep_preprocessing_fp32:
+        preprocessing = find_preprocessing_node_names(model)
+        if preprocessing:
+            node_block_list = sorted(preprocessing)
+            print(f"  Keeping {len(node_block_list)} preprocessing node(s) in FP32")
+        else:
+            print("  No backbone Conv found; converting the full graph to FP16")
+
     try:
         from onnxconverter_common import float16
 
         model_fp16 = float16.convert_float_to_float16(
             model,
             keep_io_types=True,
+            node_block_list=node_block_list,
         )
         print("  FP16 conversion succeeded")
     except ImportError:
@@ -1194,7 +1263,9 @@ def convert_to_fp16(model: onnx.ModelProto) -> Optional[onnx.ModelProto]:
         try:
             from onnxruntime.transformers import float16
 
-            model_fp16 = float16.convert_float_to_float16(model, keep_io_types=True)
+            model_fp16 = float16.convert_float_to_float16(
+                model, keep_io_types=True, node_block_list=node_block_list
+            )
             print("  FP16 conversion succeeded (via onnxruntime)")
         except Exception as e:
             print(f"  FP16 conversion failed: {e}")
@@ -1409,6 +1480,12 @@ def main():
     )
     parser.add_argument("--fp32-only", action="store_true", help="Only output FP32 model")
     parser.add_argument("--no-fp16", action="store_true", help="Skip FP16 conversion")
+    parser.add_argument(
+        "--fp16-full",
+        action="store_true",
+        help="Convert the entire graph to FP16, including spectrogram preprocessing "
+        "(default keeps the preprocessing front-end in FP32 for accuracy)",
+    )
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantization")
     parser.add_argument(
         "--int8-arm", action="store_true", help="Also create ARM-compatible INT8 model"
@@ -1470,7 +1547,7 @@ def main():
     # Convert to FP16
     if not args.no_fp16:
         print("\n[FP16] Converting to FP16...")
-        model_fp16 = convert_to_fp16(model)
+        model_fp16 = convert_to_fp16(model, keep_preprocessing_fp32=not args.fp16_full)
         if model_fp16 is not None:
             print(f"[FP16] Saving: {fp16_path}")
             onnx.save(model_fp16, fp16_path)

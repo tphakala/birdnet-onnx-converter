@@ -254,3 +254,103 @@ def test_decouple_skips_output_with_no_producer():
     model.ir_version = 9
 
     assert decouple_dual_role_outputs(model) == 0
+
+
+def _make_preproc_conv_model() -> onnx.ModelProto:
+    """Build a tiny model with a preprocessing MatMul feeding a backbone Conv,
+    mirroring the spectrogram-front-end -> CNN structure of BirdNET."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, 4])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [1, 4])
+    w_spec = h.make_tensor("w_spec", TensorProto.FLOAT, [4, 4], np.eye(4, dtype=np.float32).ravel())
+    w_conv = h.make_tensor("w_conv", TensorProto.FLOAT, [1, 1, 1, 1], [1.0])
+    s_img = h.make_tensor("s_img", TensorProto.INT64, [4], [1, 1, 2, 2])
+    s_out = h.make_tensor("s_out", TensorProto.INT64, [2], [1, 4])
+    nodes = [
+        h.make_node("MatMul", ["X", "w_spec"], ["spec"], name="pre_matmul"),
+        h.make_node("Reshape", ["spec", "s_img"], ["img"], name="pre_reshape"),
+        h.make_node("Conv", ["img", "w_conv"], ["feat"], name="backbone_conv"),
+        h.make_node("Reshape", ["feat", "s_out"], ["out"], name="post_reshape"),
+    ]
+    graph = h.make_graph(nodes, "preproc_conv", [x], [out], [w_spec, w_conv, s_img, s_out])
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+    return model
+
+
+def test_find_preprocessing_node_names_identifies_frontend():
+    """The front-end is the ancestors of the first Conv; the Conv and downstream
+    nodes are excluded."""
+    from optimize import find_preprocessing_node_names
+
+    names = find_preprocessing_node_names(_make_preproc_conv_model())
+    assert names == {"pre_matmul", "pre_reshape"}
+    assert "backbone_conv" not in names
+    assert "post_reshape" not in names
+
+
+def test_find_preprocessing_node_names_empty_without_conv():
+    """A graph with no Conv has no locatable front-end."""
+    from optimize import find_preprocessing_node_names
+
+    assert find_preprocessing_node_names(_make_dual_role_model()) == set()
+
+
+def test_fp16_keeps_preprocessing_in_fp32_by_default():
+    """The preprocessing MatMul weight stays FP32 while the backbone Conv weight
+    is converted to FP16."""
+    from optimize import convert_to_fp16
+
+    fp16 = convert_to_fp16(_make_preproc_conv_model())
+    assert fp16 is not None
+    onnx.checker.check_model(fp16)
+    dtypes = {i.name: i.data_type for i in fp16.graph.initializer}
+    assert dtypes["w_spec"] == onnx.TensorProto.FLOAT, "preprocessing MatMul must stay FP32"
+    assert dtypes["w_conv"] == onnx.TensorProto.FLOAT16, "backbone Conv must be FP16"
+
+
+def test_fp16_full_converts_preprocessing_to_fp16():
+    """keep_preprocessing_fp32=False (CLI --fp16-full) converts the whole graph."""
+    from optimize import convert_to_fp16
+
+    fp16 = convert_to_fp16(_make_preproc_conv_model(), keep_preprocessing_fp32=False)
+    assert fp16 is not None
+    onnx.checker.check_model(fp16)
+    dtypes = {i.name: i.data_type for i in fp16.graph.initializer}
+    assert dtypes["w_spec"] == onnx.TensorProto.FLOAT16
+    assert dtypes["w_conv"] == onnx.TensorProto.FLOAT16
+
+
+def test_fp16_protects_spectrogram_matmuls_on_real_model(optimized_fp32_path: Path):
+    """On the real optimized BirdNET model, the spectrogram MatMuls (RFFT and mel
+    filterbank) keep FP32 weights with protection and become FP16 without it."""
+    from optimize import convert_to_fp16, find_preprocessing_node_names
+
+    base = onnx.load(str(optimized_fp32_path))
+    preprocessing = find_preprocessing_node_names(base)
+    spectrogram_matmuls = {
+        n.name for n in base.graph.node if n.op_type == "MatMul" and n.name in preprocessing
+    }
+    assert spectrogram_matmuls, "expected to find spectrogram MatMuls in the front-end"
+
+    def matmul_weight_dtypes(model: onnx.ModelProto, names: set[str]) -> set[int]:
+        init_types = {i.name: i.data_type for i in model.graph.initializer}
+        dtypes = set()
+        for node in model.graph.node:
+            if node.name in names:
+                dtypes.update(init_types[i] for i in node.input if i in init_types)
+        return dtypes
+
+    protected = convert_to_fp16(onnx.load(str(optimized_fp32_path)), keep_preprocessing_fp32=True)
+    full = convert_to_fp16(onnx.load(str(optimized_fp32_path)), keep_preprocessing_fp32=False)
+    assert protected is not None and full is not None
+
+    assert onnx.TensorProto.FLOAT in matmul_weight_dtypes(protected, spectrogram_matmuls), (
+        "spectrogram MatMul weights must remain FP32 when protected"
+    )
+    assert matmul_weight_dtypes(full, spectrogram_matmuls) == {onnx.TensorProto.FLOAT16}, (
+        "spectrogram MatMul weights must be FP16 with --fp16-full"
+    )
