@@ -561,6 +561,147 @@ def remove_identity_casts(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]
     return model, replacements
 
 
+def collapse_select_to_where(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
+    """Collapse tf2onnx SelectV2 decompositions back into a single Where op.
+
+    tf2onnx lowers ``tf.where(cond, T, F)`` (SelectV2) into a Cast/Mul/Add cluster::
+
+        Add( Mul(Cast(cond), T), Mul(F, Cast(Not(cond))) )
+
+    arm64 ONNX Runtime's graph optimizer drops the bool->float Cast and then
+    rejects the resulting ``Mul(bool, float)``, so a model carrying this pattern
+    fails to load on arm64. ``Where`` consumes a bool condition natively, so
+    rewriting the cluster to ``Where(cond, T, F)`` yields a model that loads on
+    arm64 ORT and is numerically identical on every runtime.
+
+    The match is structural rather than name-based, so it generalizes to any model
+    that carries the pattern (for example the BirdNET v2.4 MData range filter's
+    location encoder). A cluster is collapsed only when its intermediate tensors
+    are not consumed elsewhere, so the rewrite never drops a live value.
+
+    Returns the (mutated) model and the number of clusters collapsed.
+    """
+    graph = model.graph
+    producer: dict[str, onnx.NodeProto] = {
+        out: node for node in graph.node for out in node.output if out
+    }
+    use_count: dict[str, int] = {}
+    for node in graph.node:
+        for inp in node.input:
+            if inp:
+                use_count[inp] = use_count.get(inp, 0) + 1
+    for graph_out in graph.output:
+        use_count[graph_out.name] = use_count.get(graph_out.name, 0) + 1
+
+    def split_mul(mul: onnx.NodeProto) -> Optional[tuple[onnx.NodeProto, str]]:
+        """Return (cast_node, value_tensor) when one Mul input is a Cast, else None."""
+        if len(mul.input) != 2:
+            return None
+        for idx in (0, 1):
+            cand = producer.get(mul.input[idx])
+            if cand is not None and cand.op_type == "Cast":
+                return cand, mul.input[1 - idx]
+        return None
+
+    def cast_source(cast: onnx.NodeProto) -> tuple[str, str, Optional[onnx.NodeProto]]:
+        """Classify a Cast's condition source as a direct cond or Not(cond)."""
+        if not cast.input:
+            return "direct", "", None
+        src = producer.get(cast.input[0])
+        if src is not None and src.op_type == "Not" and src.input:
+            return "not", src.input[0], src
+        return "direct", cast.input[0], None
+
+    replacements: list[tuple[list[onnx.NodeProto], onnx.NodeProto]] = []
+    # Identify nodes by their (unique) first output tensor name rather than id():
+    # protobuf may hand back fresh wrapper objects per repeated-field access, so
+    # object identity is not stable across iterations of graph.node.
+    consumed: set[str] = set()
+
+    for add in graph.node:
+        if add.op_type != "Add" or len(add.input) != 2 or not add.output:
+            continue
+        mul_a = producer.get(add.input[0])
+        mul_b = producer.get(add.input[1])
+        if mul_a is None or mul_b is None:
+            continue
+        if mul_a.op_type != "Mul" or mul_b.op_type != "Mul":
+            continue
+        if mul_a.output[0] in consumed or mul_b.output[0] in consumed:
+            continue
+        split_a = split_mul(mul_a)
+        split_b = split_mul(mul_b)
+        if split_a is None or split_b is None:
+            continue
+        cast_a, val_a = split_a
+        cast_b, val_b = split_b
+        kind_a, cond_a, not_a = cast_source(cast_a)
+        kind_b, cond_b, not_b = cast_source(cast_b)
+        if {kind_a, kind_b} != {"direct", "not"} or cond_a != cond_b:
+            continue
+        if kind_a == "direct":
+            true_val, false_val, not_node = val_a, val_b, not_b
+        else:
+            true_val, false_val, not_node = val_b, val_a, not_a
+        if not_node is None:  # unreachable: exactly one branch is Not(cond)
+            continue
+
+        intermediates = [
+            mul_a.output[0],
+            mul_b.output[0],
+            cast_a.output[0],
+            cast_b.output[0],
+            not_node.output[0],
+        ]
+        if any(use_count.get(t, 0) > 1 for t in intermediates):
+            continue  # an intermediate is live elsewhere; collapsing would drop it
+
+        where_name = f"{add.name}_where" if add.name else f"Where_{add.output[0]}"
+        where = helper.make_node(
+            "Where", [cond_a, true_val, false_val], [add.output[0]], name=where_name
+        )
+        cluster = [add, mul_a, mul_b, cast_a, cast_b, not_node]
+        replacements.append((cluster, where))
+        for node in cluster:
+            consumed.add(node.output[0])
+
+    if not replacements:
+        return model, 0
+
+    remove_outputs = {
+        node.output[0] for cluster, _ in replacements for node in cluster if node.output
+    }
+    kept = [node for node in graph.node if not (node.output and node.output[0] in remove_outputs)]
+    kept.extend(where for _, where in replacements)
+
+    # Topological sort: emit a node only once all of its inputs are available.
+    available = {init.name for init in graph.initializer}
+    available.update(value.name for value in graph.input)
+    ordered: list[onnx.NodeProto] = []
+    pending = list(kept)
+    progress = True
+    while pending and progress:
+        progress = False
+        rest = []
+        for node in pending:
+            if all(inp == "" or inp in available for inp in node.input):
+                ordered.append(node)
+                available.update(node.output)
+                progress = True
+            else:
+                rest.append(node)
+        pending = rest
+    if pending:
+        raise RuntimeError(
+            "collapse_select_to_where: topological sort failed; unresolved nodes: "
+            f"{[node.name for node in pending]}"
+        )
+
+    del graph.node[:]
+    graph.node.extend(ordered)
+    return model, len(replacements)
+
+
 def remove_redundant_reshapes(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     """Remove consecutive Reshape operations that can be merged."""
     nodes_to_remove = []
@@ -1675,7 +1816,27 @@ def main():
         action="store_true",
         help="Perch v2 mode: preserve multi-output naming and set graph name to Perch",
     )
+    parser.add_argument(
+        "--collapse-select-to-where",
+        action="store_true",
+        help="Apply only the SelectV2->Where collapse pass (no full optimization) and "
+        "write a single ONNX file to --output. For models arm64 ORT rejects due to the "
+        "Cast/Mul SelectV2 decomposition (e.g. the MData range filter), which the full "
+        "pipeline would otherwise corrupt.",
+    )
     args = parser.parse_args()
+
+    if args.collapse_select_to_where:
+        print(f"Loading model: {args.input}")
+        model = onnx.load(args.input)
+        model, collapsed = collapse_select_to_where(model)
+        print(f"  Collapsed {collapsed} SelectV2 cluster(s) to Where")
+        onnx.checker.check_model(model)
+        out_path = args.output if args.output.endswith(".onnx") else f"{args.output}.onnx"
+        onnx.save(model, out_path)
+        size_mb = Path(out_path).stat().st_size / (1024 * 1024)
+        print(f"  Wrote {out_path} ({size_mb:.2f} MB)")
+        return 0
 
     # Determine output paths
     output_base = args.output
