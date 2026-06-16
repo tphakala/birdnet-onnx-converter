@@ -5,6 +5,14 @@ This script compares bird detection predictions from an ONNX model against
 a baseline CSV (typically from TFLite/BirdNET Analyzer) to verify that
 the converted model produces accurate results.
 
+Detections are compared by confidence value, not by membership in a
+hard-thresholded set: a detection that merely straddles the --min-confidence
+cutoff (present on one side, just under on the other) is tolerated when the two
+models' confidences agree within --tolerance. A genuine divergence larger than
+--tolerance still fails. This keeps the comparison stable across precision
+variants (FP16/INT8) whose rounding can nudge a borderline detection across the
+reporting threshold without changing the result in any meaningful way.
+
 Usage:
     python compare_predictions.py baseline.csv test.csv --tolerance 0.01
 """
@@ -26,22 +34,23 @@ class Detection:
     confidence: float
 
 
-def parse_csv(path: str, min_confidence: float = 0.10) -> list[Detection]:
-    """Parse BirdNET Analyzer CSV format, filtering by minimum confidence.
+def parse_csv(path: str, floor: float = 0.0) -> list[Detection]:
+    """Parse BirdNET Analyzer CSV format.
 
     Args:
         path: Path to CSV file
-        min_confidence: Minimum confidence threshold (default: 0.10)
+        floor: Drop rows below this confidence (default 0.0 keeps every row so
+            near-cutoff values remain available for boundary comparison)
 
     Returns:
-        List of Detection objects above the confidence threshold
+        List of Detection objects at or above the floor
     """
     detections = []
     with open(path, encoding="utf-8-sig") as f:  # Handle BOM in Windows-generated CSVs
         reader = csv.DictReader(f)
         for row in reader:
             conf = float(row["Confidence"])
-            if conf >= min_confidence:
+            if conf >= floor:
                 detections.append(
                     Detection(
                         start=float(row["Start (s)"]),
@@ -55,50 +64,71 @@ def parse_csv(path: str, min_confidence: float = 0.10) -> list[Detection]:
 
 
 def compare(
-    baseline: list[Detection], test: list[Detection], tolerance: float
-) -> tuple[bool, list[str]]:
-    """Compare test detections against baseline.
+    baseline: list[Detection],
+    test: list[Detection],
+    tolerance: float,
+    min_confidence: float,
+) -> tuple[bool, list[str], list[str]]:
+    """Compare test detections against baseline by confidence value.
+
+    A detection is "active" when its confidence is at or above min_confidence.
+    For every detection active in either model, the two confidences are compared
+    (a side that lacks the detection contributes its actual sub-threshold value,
+    or 0.0 if absent entirely). A difference greater than tolerance is an error.
+    A membership flip across the cutoff whose confidences still agree within
+    tolerance is reported as a (non-failing) boundary note.
 
     Args:
-        baseline: List of baseline detections (ground truth)
-        test: List of test detections (from ONNX model)
+        baseline: Baseline detections (ground truth), parsed with floor 0.0
+        test: Test detections (from ONNX model), parsed with floor 0.0
         tolerance: Maximum allowed confidence difference
+        min_confidence: Confidence threshold a detection must meet to be active
 
     Returns:
-        Tuple of (passed, list of error messages)
+        Tuple of (passed, error messages, boundary notes)
     """
-    errors = []
+    errors: list[str] = []
+    notes: list[str] = []
+
     # Round float keys to 2 decimal places to avoid floating-point comparison issues
     baseline_map = {(round(d.start, 2), round(d.end, 2), d.scientific_name): d for d in baseline}
     test_map = {(round(d.start, 2), round(d.end, 2), d.scientific_name): d for d in test}
 
-    baseline_keys = set(baseline_map.keys())
-    test_keys = set(test_map.keys())
+    def conf(map_: dict, key: tuple) -> float:
+        det = map_.get(key)
+        return det.confidence if det is not None else 0.0
 
-    # Check for missing detections (in baseline but not in test)
-    for key in sorted(baseline_keys - test_keys):
+    active_baseline = {k for k, d in baseline_map.items() if d.confidence >= min_confidence}
+    active_test = {k for k, d in test_map.items() if d.confidence >= min_confidence}
+
+    for key in sorted(active_baseline | active_test):
+        bc = conf(baseline_map, key)
+        tc = conf(test_map, key)
+        diff = abs(bc - tc)
+        if diff <= tolerance:
+            # If membership flipped across the cutoff, record a boundary note.
+            if (key in active_baseline) != (key in active_test):
+                name = (baseline_map.get(key) or test_map[key]).scientific_name
+                notes.append(
+                    f"Boundary detection at {(key[0], key[1])} for {name}: "
+                    f"baseline={bc:.3f}, test={tc:.3f} (within tolerance of cutoff)"
+                )
+            continue
+
         segment = (key[0], key[1])
-        bd = baseline_map[key]
-        errors.append(f"Missing detection at {segment}: {bd.scientific_name} ({bd.confidence:.2f})")
-
-    # Check for false positives (in test but not in baseline)
-    for key in sorted(test_keys - baseline_keys):
-        segment = (key[0], key[1])
-        td = test_map[key]
-        errors.append(f"False positive at {segment}: {td.scientific_name} ({td.confidence:.2f})")
-
-    # Check for confidence mismatch on common detections
-    for key in sorted(baseline_keys & test_keys):
-        bd = baseline_map[key]
-        td = test_map[key]
-        if abs(td.confidence - bd.confidence) > tolerance:
-            segment = (key[0], key[1])
+        name = (baseline_map.get(key) or test_map[key]).scientific_name
+        if key not in active_test:
             errors.append(
-                f"Confidence mismatch at {segment} for {bd.scientific_name}: "
-                f"baseline={bd.confidence:.2f}, test={td.confidence:.2f}"
+                f"Missing detection at {segment}: {name} (baseline={bc:.2f}, test={tc:.2f})"
+            )
+        elif key not in active_baseline:
+            errors.append(f"False positive at {segment}: {name} (baseline={bc:.2f}, test={tc:.2f})")
+        else:
+            errors.append(
+                f"Confidence mismatch at {segment} for {name}: baseline={bc:.2f}, test={tc:.2f}"
             )
 
-    return len(errors) == 0, sorted(errors)
+    return len(errors) == 0, sorted(errors), sorted(notes)
 
 
 def main() -> int:
@@ -120,13 +150,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    baseline = parse_csv(args.baseline, args.min_confidence)
-    test = parse_csv(args.test, args.min_confidence)
+    # Parse the full CSVs so values just below the cutoff remain available for
+    # boundary comparison; activeness is decided in compare() via min_confidence.
+    baseline = parse_csv(args.baseline)
+    test = parse_csv(args.test)
 
-    passed, errors = compare(baseline, test, args.tolerance)
+    passed, errors, notes = compare(baseline, test, args.tolerance, args.min_confidence)
 
-    print(f"Baseline: {len(baseline)} detections, Test: {len(test)} detections")
+    active_baseline = sum(1 for d in baseline if d.confidence >= args.min_confidence)
+    active_test = sum(1 for d in test if d.confidence >= args.min_confidence)
+    print(f"Baseline: {active_baseline} detections, Test: {active_test} detections")
     print(f"Tolerance: ±{args.tolerance:.2f}, Min confidence: {args.min_confidence:.2f}")
+
+    for note in notes[:20]:
+        print(f"  note: {note}")
 
     if not passed:
         print(f"\nFAILED: {len(errors)} prediction mismatches")

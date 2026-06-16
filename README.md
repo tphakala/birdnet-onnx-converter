@@ -10,7 +10,10 @@ Convert and optimize BirdNET models for ONNX Runtime inference on various platfo
 - **Output pruning** - Strip unused model outputs to reduce compute
 - **Multiple precision formats**:
   - FP32 - Standard precision for GPU/desktop
-  - FP16 - Half precision for devices with FP16 support (RPi 5, modern GPUs)
+  - FP16 - Half precision for devices with FP16 support (RPi 5, modern GPUs). The
+    spectrogram preprocessing front-end (STFT/mel MatMuls and normalization) is
+    kept in FP32 by default to preserve accuracy; pass `--fp16-full` to convert
+    the entire graph.
 
 ## Installation
 
@@ -66,6 +69,10 @@ python optimize.py --input BirdNET_Model.onnx --output BirdNET
 
 # BirdNET: output only FP32
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp32-only
+
+# FP16: convert the whole graph, including spectrogram preprocessing
+# (by default the preprocessing front-end is kept in FP32 for accuracy)
+python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-full
 
 # Perch v2: preserve multi-output naming, include ARM-optimized INT8
 python optimize.py --input perch_v2.onnx --output perch_v2 --perch --int8-arm
