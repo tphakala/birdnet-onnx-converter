@@ -507,3 +507,28 @@ def test_int8_arm_keeps_spectrogram_matmuls_full_precision(
         assert any(init_types.get(i) == onnx.TensorProto.FLOAT for i in node.input), (
             f"{name} weights must remain FP32"
         )
+
+
+def test_int8_warning_emitted_only_when_int8_produced():
+    """The INT8 experimental warning must be emitted iff an INT8 variant is
+    produced (including --int8-arm even with --no-int8), and the emitted text
+    must name the accuracy risk and the opt-out so users do not ship a
+    silently-degraded model."""
+    from optimize import _print_int8_warning
+
+    # (no_int8, int8_arm) -> whether an INT8 model is produced (so warn)
+    expected = {
+        (False, False): True,  # default: INT8 produced
+        (True, False): False,  # --no-int8 only: nothing produced
+        (True, True): True,  # --no-int8 --int8-arm: ARM still produced
+        (False, True): True,  # --int8-arm: both produced
+    }
+    for (no_int8, int8_arm), should_warn in expected.items():
+        captured: list[str] = []
+        emitted = _print_int8_warning(no_int8, int8_arm, out=captured.append)
+        assert emitted is should_warn, f"no_int8={no_int8} int8_arm={int8_arm}"
+        assert bool(captured) is should_warn
+        if should_warn:
+            text = "\n".join(captured).lower()
+            assert "experimental" in text and "accuracy" in text
+            assert "--no-int8" in text and "fp16" in text
