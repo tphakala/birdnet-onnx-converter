@@ -94,6 +94,69 @@ def test_fp16_output_has_valid_shape(optimized_fp16_path: Path):
     assert output.shape == (1, EXPECTED_SPECIES_COUNT)
 
 
+def _resolve_output(session: ort.InferenceSession, outputs: list, name_contains: str):
+    """Look up a model output by name substring, falling back to index 0.
+
+    Output ordering is not guaranteed across converters/formats, so multi-output
+    consumers should select by name rather than position.
+    """
+    for i, meta in enumerate(session.get_outputs()):
+        if name_contains.lower() in meta.name.lower():
+            return outputs[i]
+    return outputs[0]
+
+
+def test_output_resolution_is_name_based_not_positional():
+    """A two-output model is queried by name, so the correct tensor is returned
+    regardless of output order."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, 2])
+    emb = h.make_tensor_value_info("embeddings", TensorProto.FLOAT, [1, 2])
+    pred = h.make_tensor_value_info("predictions", TensorProto.FLOAT, [1, 3])
+    we = h.make_tensor("we", TensorProto.FLOAT, [2, 2], [1, 0, 0, 1])
+    wp = h.make_tensor("wp", TensorProto.FLOAT, [2, 3], [1, 0, 0, 0, 1, 0])
+    nodes = [
+        h.make_node("MatMul", ["X", "we"], ["embeddings"]),
+        h.make_node("MatMul", ["X", "wp"], ["predictions"]),
+    ]
+    # Outputs deliberately ordered embeddings-first to defeat index-0 assumptions.
+    graph = h.make_graph(nodes, "two_out", [x], [emb, pred], [we, wp])
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    session = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+    outputs = session.run(None, {"X": np.ones((1, 2), dtype=np.float32)})
+
+    predictions = _resolve_output(session, outputs, "predictions")
+    assert predictions.shape == (1, 3), "name-based lookup must return the predictions tensor"
+    # Positional access would have returned embeddings (shape (1, 2)) here.
+    assert session.get_outputs()[0].name == "embeddings"
+
+
+def test_fp32_inference_batch_sweep(optimized_fp32_path: Path):
+    """The dynamic batch axis works across batch sizes (the variable axis for the
+    fixed-window v2.4 model); output batch dim must track the input."""
+    session = ort.InferenceSession(str(optimized_fp32_path), providers=["CPUExecutionProvider"])
+    input_name = session.get_inputs()[0].name
+    for batch in (1, 2, 3):
+        dummy = np.zeros((batch, INPUT_LENGTH), dtype=np.float32)
+        output = session.run(None, {input_name: dummy})[0]
+        assert output.shape == (batch, EXPECTED_SPECIES_COUNT), (
+            f"batch {batch} should yield {(batch, EXPECTED_SPECIES_COUNT)}, got {output.shape}"
+        )
+
+
+def test_fp32_inference_on_audio(optimized_fp32_path: Path, audio_input):
+    """The model runs on (deterministic) audio input and produces finite logits."""
+    session = ort.InferenceSession(str(optimized_fp32_path), providers=["CPUExecutionProvider"])
+    input_name = session.get_inputs()[0].name
+    output = session.run(None, {input_name: audio_input})[0]
+    assert output.shape == (1, EXPECTED_SPECIES_COUNT)
+    assert np.all(np.isfinite(output))
+
+
 def test_labels_match_output_size(optimized_fp32_path: Path, labels_path: Path):
     """Verify labels file has same count as model output."""
     session = ort.InferenceSession(
