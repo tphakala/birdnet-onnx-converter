@@ -95,15 +95,20 @@ def test_fp16_output_has_valid_shape(optimized_fp16_path: Path):
 
 
 def _resolve_output(session: ort.InferenceSession, outputs: list, name_contains: str):
-    """Look up a model output by name substring, falling back to index 0.
+    """Look up a model output by name substring.
 
     Output ordering is not guaranteed across converters/formats, so multi-output
-    consumers should select by name rather than position.
+    consumers must select by name rather than position. If no name matches, fall
+    back to index 0 only for a single-output model; for a multi-output model a
+    silent index-0 fallback could return the wrong tensor, so raise instead.
     """
     for i, meta in enumerate(session.get_outputs()):
         if name_contains.lower() in meta.name.lower():
             return outputs[i]
-    return outputs[0]
+    if len(outputs) == 1:
+        return outputs[0]
+    names = [meta.name for meta in session.get_outputs()]
+    raise KeyError(f"no output name contains {name_contains!r}; outputs are {names}")
 
 
 def test_output_resolution_is_name_based_not_positional():
