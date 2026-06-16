@@ -38,6 +38,7 @@ Requirements:
 """
 
 import argparse
+from itertools import chain
 from pathlib import Path
 from typing import Optional
 
@@ -1099,7 +1100,8 @@ def decouple_dual_role_outputs(model: onnx.ModelProto) -> int:
     becomes a clean single-producer graph output that keep_io_types handles
     correctly without touching the internal consumers.
 
-    Must run before float16 conversion. Returns the number of outputs decoupled.
+    Must run before float16 conversion. Mutates the model in place. Returns the
+    number of outputs decoupled.
     """
     # Names of tensors consumed by any node (graph outputs are not node inputs).
     consumed: set[str] = set()
@@ -1108,12 +1110,13 @@ def decouple_dual_role_outputs(model: onnx.ModelProto) -> int:
             if inp:
                 consumed.add(inp)
 
-    # All tensor names in use, so minted internal names cannot collide.
+    # All tensor names in use, so minted internal names cannot collide. Includes
+    # value_info so a minted name cannot inherit a stale intermediate annotation.
     used: set[str] = set(consumed)
     used.update(init.name for init in model.graph.initializer)
     for node in model.graph.node:
         used.update(o for o in node.output if o)
-    for value in list(model.graph.input) + list(model.graph.output):
+    for value in chain(model.graph.input, model.graph.output, model.graph.value_info):
         used.add(value.name)
 
     decoupled = 0
@@ -1124,7 +1127,8 @@ def decouple_dual_role_outputs(model: onnx.ModelProto) -> int:
 
         # A graph output with no producing node (e.g. an input passthrough) has
         # no fp16 boundary to corrupt; leave it for the sentinel to handle.
-        if not any(original in node.output for node in model.graph.node):
+        producer = find_node_by_output(model, original)
+        if producer is None:
             continue
 
         internal = f"{original}_fp16src"
@@ -1134,27 +1138,26 @@ def decouple_dual_role_outputs(model: onnx.ModelProto) -> int:
             internal = f"{original}_fp16src{suffix}"
         used.add(internal)
 
-        # Repoint the producer(s) of `original` to emit `internal` instead.
+        # Repoint the producer's output and every internal consumer of `original`
+        # to the private `internal` name (slice-assign to avoid mutating a
+        # repeated field while iterating it).
         for node in model.graph.node:
-            for i, name in enumerate(node.output):
-                if name == original:
-                    node.output[i] = internal
-        # Repoint internal consumers of `original` to read `internal`.
-        for node in model.graph.node:
-            for i, name in enumerate(node.input):
-                if name == original:
-                    node.input[i] = internal
+            if original in node.output:
+                node.output[:] = [internal if o == original else o for o in node.output]
+            if original in node.input:
+                node.input[:] = [internal if i == original else i for i in node.input]
 
-        # Re-expose `original` as the graph output via Identity (appended last so
-        # it stays after its `internal` producer in topological order).
-        model.graph.node.append(
-            onnx.helper.make_node(
-                "Identity",
-                inputs=[internal],
-                outputs=[original],
-                name=f"_fp16_decoupler_{original}",
-            )
+        # Re-expose `original` as the graph output via Identity, inserted right
+        # after its producer so the graph stays topologically sorted regardless
+        # of where the original consumers (including any subgraph captures) sit.
+        identity = onnx.helper.make_node(
+            "Identity",
+            inputs=[internal],
+            outputs=[original],
+            name=f"_fp16_decoupler_{original}",
         )
+        producer_idx = next(i for i, n in enumerate(model.graph.node) if n is producer)
+        model.graph.node.insert(producer_idx + 1, identity)
         decoupled += 1
 
     return decoupled
@@ -1166,7 +1169,11 @@ def convert_to_fp16(model: onnx.ModelProto) -> Optional[onnx.ModelProto]:
     Decouples dual-role outputs first so keep_io_types Cast insertion cannot
     corrupt internal consumers, then uses onnxconverter-common for the FP16
     conversion. fix_fp16_type_mismatches is kept as a sentinel and should report
-    zero fixes once decoupling has run.
+    zero rewires once decoupling has run.
+
+    Note: the input model is mutated in place by the decouple step. Callers that
+    still need the original FP32 graph afterward should save or copy it first
+    (main() saves the FP32 model to disk before calling this).
     """
     decoupled = decouple_dual_role_outputs(model)
     if decoupled > 0:
