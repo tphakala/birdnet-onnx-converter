@@ -19,7 +19,9 @@ Key optimizations:
 
 Output formats:
 - FP32: Standard precision for GPU/desktop CPU
-- FP16: Half precision for devices with FP16 hardware (RPi 5, modern GPUs)
+- FP16: Half precision for devices with FP16 hardware (RPi 5, modern GPUs). The
+  spectrogram preprocessing front-end is kept in FP32 by default for accuracy;
+  use --fp16-full to convert the entire graph.
 - INT8: Quantized for low-power devices (RPi 3/4, embedded ARM)
 
 Usage:
@@ -32,6 +34,9 @@ Usage:
     # Skip specific formats
     python optimize.py --input model.onnx --output BirdNET --no-fp16
     python optimize.py --input model.onnx --output BirdNET --no-int8
+
+    # Convert the whole graph to FP16 (including preprocessing)
+    python optimize.py --input model.onnx --output BirdNET --fp16-full
 
 Requirements:
     pip install onnx onnx-simplifier onnxslim numpy onnxruntime onnxconverter-common
@@ -1177,6 +1182,12 @@ def find_preprocessing_node_names(model: onnx.ModelProto) -> set[str]:
     ops such as ReduceMean and Mul also appear inside the CNN backbone (SE
     blocks), which should stay FP16. Returns an empty set if the graph has no
     Conv (the front-end cannot be located).
+
+    Assumes the first Conv in topological order is the backbone stem (true for
+    BirdNET, whose preprocessing branches merge before any Conv). If a model
+    instead has a Conv inside a parallel preprocessing branch, only that Conv's
+    ancestors are protected; the fallback is reduced FP32 coverage, never an
+    invalid graph, and --fp16-full remains available.
     """
     first_conv = next((n for n in model.graph.node if n.op_type == "Conv"), None)
     if first_conv is None:
@@ -1247,7 +1258,7 @@ def convert_to_fp16(
             node_block_list = sorted(preprocessing)
             print(f"  Keeping {len(node_block_list)} preprocessing node(s) in FP32")
         else:
-            print("  No backbone Conv found; converting the full graph to FP16")
+            print("  No preprocessing front-end identified; converting the full graph to FP16")
 
     try:
         from onnxconverter_common import float16
@@ -1274,6 +1285,10 @@ def convert_to_fp16(
         print(f"  FP16 conversion failed: {e}")
         return None
 
+    # The value_info correction below is not merely cosmetic for the
+    # keep_preprocessing_fp32 path: the converter leaves stale FP32 annotations at
+    # the FP32->FP16 block-list boundary, and ONNX Runtime refuses to load the
+    # model until they are fixed. Always run the sentinel.
     rewires, vi_fixes = fix_fp16_type_mismatches(model_fp16)
     if rewires > 0:
         print(

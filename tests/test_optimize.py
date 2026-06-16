@@ -299,6 +299,33 @@ def test_find_preprocessing_node_names_empty_without_conv():
     assert find_preprocessing_node_names(_make_dual_role_model()) == set()
 
 
+def test_find_preprocessing_node_names_uses_first_conv():
+    """With multiple Convs, only ancestors of the FIRST Conv are the front-end;
+    nodes between the first and a later Conv are downstream and excluded."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    from optimize import find_preprocessing_node_names
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, 1, 4, 4])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [1, 1, 4, 4])
+    w = h.make_tensor("w", TensorProto.FLOAT, [1, 1, 1, 1], [1.0])
+    s = h.make_tensor("s", TensorProto.FLOAT, [1], [2.0])
+    nodes = [
+        h.make_node("Mul", ["X", "s"], ["pre"], name="pre_mul"),  # front-end
+        h.make_node("Conv", ["pre", "w"], ["c1"], name="conv1"),  # backbone stem
+        h.make_node("Relu", ["c1"], ["r"], name="between_relu"),  # downstream of conv1
+        h.make_node("Conv", ["r", "w"], ["out"], name="conv2"),
+    ]
+    graph = h.make_graph(nodes, "multi_conv", [x], [out], [w, s])
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    names = find_preprocessing_node_names(model)
+    assert names == {"pre_mul"}
+    assert {"conv1", "between_relu", "conv2"}.isdisjoint(names)
+
+
 def test_fp16_keeps_preprocessing_in_fp32_by_default():
     """The preprocessing MatMul weight stays FP32 while the backbone Conv weight
     is converted to FP16."""
@@ -354,3 +381,16 @@ def test_fp16_protects_spectrogram_matmuls_on_real_model(optimized_fp32_path: Pa
     assert matmul_weight_dtypes(full, spectrogram_matmuls) == {onnx.TensorProto.FLOAT16}, (
         "spectrogram MatMul weights must be FP16 with --fp16-full"
     )
+
+    # The protected model must load and run in ONNX Runtime. The FP32/FP16
+    # block-list boundary leaves stale value_info that ORT rejects unless the
+    # value_info sentinel fixes it; this guards that the sentinel keeps running.
+    import numpy as np
+    import onnxruntime as ort
+
+    session = ort.InferenceSession(
+        protected.SerializeToString(), providers=["CPUExecutionProvider"]
+    )
+    spec = session.get_inputs()[0]
+    shape = [d if isinstance(d, int) and d > 0 else 1 for d in spec.shape]
+    session.run(None, {spec.name: np.zeros(shape, dtype=np.float32)})
