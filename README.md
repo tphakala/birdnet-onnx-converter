@@ -96,6 +96,13 @@ python optimize.py --input perch_v2.onnx --output perch_v2 --perch --int8-arm
 # Perch v2: prune unused outputs (keep only embeddings and labels)
 python optimize.py --input perch_v2.onnx --output perch_v2_lite --perch \
     --prune-outputs embedding,label
+
+# Range filter / SelectV2 fix: collapse a tf2onnx where() Cast/Mul/Add cluster
+# into a single Where op (no other optimization). Use for models arm64 ONNX
+# Runtime rejects due to the bool->float Cast in the decomposition (e.g. the
+# BirdNET MData range filter), which the full optimize pipeline would corrupt.
+python optimize.py --input mdata_raw.onnx --output mdata_where.onnx \
+    --collapse-select-to-where
 ```
 
 ### Output Files
