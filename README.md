@@ -74,6 +74,10 @@ python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp32-only
 # (by default the preprocessing front-end is kept in FP32 for accuracy)
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-full
 
+# FP16: keep the Swish/SiLU activations (Sigmoid x Mul) in FP32 so ONNX Runtime's
+# CPU EP can fuse QuickGelu (much faster FP16 on ARM/CPU; weights stay FP16)
+python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-keep-activations-fp32
+
 # Perch v2: preserve multi-output naming, include ARM-optimized INT8
 python optimize.py --input perch_v2.onnx --output perch_v2 --perch --int8-arm
 

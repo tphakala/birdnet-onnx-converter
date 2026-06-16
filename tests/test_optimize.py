@@ -380,6 +380,65 @@ def test_fp16_full_converts_preprocessing_to_fp16():
     assert dtypes["w_conv"] == onnx.TensorProto.FLOAT16
 
 
+def _make_conv_swish_model() -> onnx.ModelProto:
+    """Tiny Conv -> Swish (Sigmoid * Mul) graph to exercise activation handling."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, 1, 4, 4])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [1, 1, 4, 4])
+    w = h.make_tensor("w_conv", TensorProto.FLOAT, [1, 1, 1, 1], [1.0])
+    nodes = [
+        h.make_node("Conv", ["X", "w_conv"], ["c"], name="conv1"),
+        h.make_node("Sigmoid", ["c"], ["s"], name="act_sigmoid"),
+        h.make_node("Mul", ["c", "s"], ["out"], name="act_mul"),  # Swish
+    ]
+    graph = h.make_graph(nodes, "conv_swish", [x], [out], [w])
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+    return model
+
+
+def test_fp16_keeps_activations_fp16_by_default():
+    """Default conversion converts the Swish activation (Sigmoid, Mul) to FP16."""
+    from optimize import convert_to_fp16
+
+    fp16 = convert_to_fp16(_make_conv_swish_model())
+    assert fp16 is not None
+    onnx.checker.check_model(fp16)
+    dtypes = {i.name: i.data_type for i in fp16.graph.initializer}
+    assert dtypes["w_conv"] == onnx.TensorProto.FLOAT16, "backbone Conv must be FP16"
+
+
+def test_fp16_keep_activations_fp32_blocks_swish():
+    """keep_activations_fp32=True (CLI --fp16-keep-activations-fp32) keeps the
+    Swish Sigmoid/Mul in FP32 (inserting boundary Casts) while conv weights stay
+    FP16, so ORT's CPU EP can fuse QuickGelu."""
+    from optimize import convert_to_fp16
+
+    default = convert_to_fp16(_make_conv_swish_model())
+    kept = convert_to_fp16(_make_conv_swish_model(), keep_activations_fp32=True)
+    assert default is not None and kept is not None
+    onnx.checker.check_model(kept)
+
+    # Weights stay FP16 in both (RAM benefit preserved).
+    assert {i.name: i.data_type for i in kept.graph.initializer}[
+        "w_conv"
+    ] == onnx.TensorProto.FLOAT16
+
+    # Keeping the activation in FP32 inserts FP16<->FP32 boundary Casts that the
+    # default all-FP16 conversion does not need.
+    def cast_count(m: onnx.ModelProto) -> int:
+        return sum(1 for n in m.graph.node if n.op_type == "Cast")
+
+    assert cast_count(kept) > cast_count(default), "activation boundary casts expected"
+
+    # The Sigmoid/Mul outputs run in FP32.
+    vi = {v.name: v.type.tensor_type.elem_type for v in kept.graph.value_info}
+    sig = next(n for n in kept.graph.node if n.op_type == "Sigmoid")
+    assert vi.get(sig.output[0]) == onnx.TensorProto.FLOAT, "Sigmoid must stay FP32"
+
+
 def test_fp16_protects_spectrogram_matmuls_on_real_model(optimized_fp32_path: Path):
     """On the real optimized BirdNET model, the spectrogram MatMuls (RFFT and mel
     filterbank) keep FP32 weights with protection and become FP16 without it."""

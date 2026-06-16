@@ -1247,8 +1247,18 @@ def find_preprocessing_node_names(model: onnx.ModelProto) -> set[str]:
     return names
 
 
+# Swish/SiLU activation op types (x * sigmoid(x)) kept in FP32 during FP16
+# conversion when requested. ORT's CPU execution provider only registers the
+# fused QuickGelu kernel for FP32, so an all-FP16 graph runs these unfused and
+# is much slower on ARM. Keeping them FP32 lets ORT fuse QuickGelu while the
+# conv/matmul weights stay FP16.
+_FP16_ACTIVATION_OPS = ("Sigmoid", "Mul")
+
+
 def convert_to_fp16(
-    model: onnx.ModelProto, keep_preprocessing_fp32: bool = True
+    model: onnx.ModelProto,
+    keep_preprocessing_fp32: bool = True,
+    keep_activations_fp32: bool = False,
 ) -> Optional[onnx.ModelProto]:
     """Convert FP32 model to FP16 for devices with FP16 hardware support.
 
@@ -1262,6 +1272,12 @@ def convert_to_fp16(
     Conv) is kept in FP32 to preserve accuracy while the CNN backbone is still
     converted to FP16. Pass keep_preprocessing_fp32=False (CLI --fp16-full) to
     convert the entire graph to FP16.
+
+    When keep_activations_fp32 is True (CLI --fp16-keep-activations-fp32), the
+    Swish/SiLU activations (Sigmoid x Mul) are additionally kept in FP32 so ONNX
+    Runtime's CPU EP can fuse them into its FP32 QuickGelu kernel; the conv/matmul
+    weights stay FP16. This recovers most of the FP16 latency on ARM/CPU at a
+    small runtime-RAM cost (activation buffers stay FP32).
 
     Note: the input model is mutated in place by the decouple step. Callers that
     still need the original FP32 graph afterward should save or copy it first
@@ -1280,23 +1296,33 @@ def convert_to_fp16(
         else:
             print("  No preprocessing front-end identified; converting the full graph to FP16")
 
+    if keep_activations_fp32:
+        print(
+            "  Keeping Swish/SiLU activations (Sigmoid, Mul) in FP32 so ORT's "
+            "CPU EP can fuse QuickGelu"
+        )
+
+    convert_kwargs = {"keep_io_types": True, "node_block_list": node_block_list}
+
     try:
         from onnxconverter_common import float16
 
-        model_fp16 = float16.convert_float_to_float16(
-            model,
-            keep_io_types=True,
-            node_block_list=node_block_list,
-        )
+        if keep_activations_fp32:
+            convert_kwargs["op_block_list"] = list(float16.DEFAULT_OP_BLOCK_LIST) + list(
+                _FP16_ACTIVATION_OPS
+            )
+        model_fp16 = float16.convert_float_to_float16(model, **convert_kwargs)
         print("  FP16 conversion succeeded")
     except ImportError:
         print("  Warning: onnxconverter-common not installed, trying onnxruntime")
         try:
             from onnxruntime.transformers import float16
 
-            model_fp16 = float16.convert_float_to_float16(
-                model, keep_io_types=True, node_block_list=node_block_list
-            )
+            if keep_activations_fp32:
+                convert_kwargs["op_block_list"] = list(
+                    getattr(float16, "DEFAULT_OP_BLOCK_LIST", [])
+                ) + list(_FP16_ACTIVATION_OPS)
+            model_fp16 = float16.convert_float_to_float16(model, **convert_kwargs)
             print("  FP16 conversion succeeded (via onnxruntime)")
         except Exception as e:
             print(f"  FP16 conversion failed: {e}")
@@ -1588,6 +1614,13 @@ def main():
         help="Convert the entire graph to FP16, including spectrogram preprocessing "
         "(default keeps the preprocessing front-end in FP32 for accuracy)",
     )
+    parser.add_argument(
+        "--fp16-keep-activations-fp32",
+        action="store_true",
+        help="Keep Swish/SiLU activations (Sigmoid x Mul) in FP32 during FP16 "
+        "conversion so ONNX Runtime's CPU EP can fuse QuickGelu. Recovers most "
+        "FP16 latency on ARM/CPU (weights stay FP16); small runtime-RAM cost.",
+    )
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantization")
     parser.add_argument(
         "--int8-arm", action="store_true", help="Also create ARM-compatible INT8 model"
@@ -1649,7 +1682,11 @@ def main():
     # Convert to FP16
     if not args.no_fp16:
         print("\n[FP16] Converting to FP16...")
-        model_fp16 = convert_to_fp16(model, keep_preprocessing_fp32=not args.fp16_full)
+        model_fp16 = convert_to_fp16(
+            model,
+            keep_preprocessing_fp32=not args.fp16_full,
+            keep_activations_fp32=args.fp16_keep_activations_fp32,
+        )
         if model_fp16 is not None:
             print(f"[FP16] Saving: {fp16_path}")
             onnx.save(model_fp16, fp16_path)
