@@ -1181,7 +1181,8 @@ def find_preprocessing_node_names(model: onnx.ModelProto) -> set[str]:
     Block by node name (ancestors of the first Conv) rather than by op type:
     ops such as ReduceMean and Mul also appear inside the CNN backbone (SE
     blocks), which should stay FP16. Returns an empty set if the graph has no
-    Conv (the front-end cannot be located).
+    Conv (the front-end cannot be located). Any unnamed front-end node is given
+    a unique name in place so the name-based block list cannot miss it.
 
     Assumes the first Conv in topological order is the backbone stem (true for
     BirdNET, whose preprocessing branches merge before any Conv). If a model
@@ -1219,8 +1220,13 @@ def find_preprocessing_node_names(model: onnx.ModelProto) -> set[str]:
         node = producer.get(tensor)
         if node is None:
             continue
-        if node.name:
-            names.add(node.name)
+        # Node names are optional in ONNX. The block list is name-based, so give
+        # any unnamed front-end node a unique name (derived from its unique
+        # output tensor) to ensure it is actually kept in FP32 rather than
+        # silently becoming an FP16 island inside the preprocessing region.
+        if not node.name:
+            node.name = f"_fp32_preproc_{tensor}"
+        names.add(node.name)
         for inp in node.input:
             if inp and inp not in initializers and inp not in graph_inputs:
                 stack.append(inp)

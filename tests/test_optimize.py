@@ -326,6 +326,35 @@ def test_find_preprocessing_node_names_uses_first_conv():
     assert {"conv1", "between_relu", "conv2"}.isdisjoint(names)
 
 
+def test_find_preprocessing_node_names_names_unnamed_frontend_nodes():
+    """An unnamed front-end node is given a name in place and included, so the
+    name-based block list cannot silently leave it in FP16."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    from optimize import find_preprocessing_node_names
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, 1, 4, 4])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [1, 1, 4, 4])
+    w = h.make_tensor("w", TensorProto.FLOAT, [1, 1, 1, 1], [1.0])
+    s = h.make_tensor("s", TensorProto.FLOAT, [1], [2.0])
+    nodes = [
+        h.make_node("Mul", ["X", "s"], ["pre"]),  # no name
+        h.make_node("Conv", ["pre", "w"], ["out"], name="conv1"),
+    ]
+    graph = h.make_graph(nodes, "unnamed_pre", [x], [out], [w, s])
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    names = find_preprocessing_node_names(model)
+    assert len(names) == 1
+    minted = next(iter(names))
+    assert minted.startswith("_fp32_preproc_")
+    # the name was assigned in place on the actual node
+    mul = next(n for n in model.graph.node if n.op_type == "Mul")
+    assert mul.name == minted
+
+
 def test_fp16_keeps_preprocessing_in_fp32_by_default():
     """The preprocessing MatMul weight stays FP32 while the backbone Conv weight
     is converted to FP16."""
