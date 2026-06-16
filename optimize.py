@@ -595,6 +595,8 @@ def collapse_select_to_where(model: onnx.ModelProto) -> tuple[onnx.ModelProto, i
 
     def split_mul(mul: onnx.NodeProto) -> Optional[tuple[onnx.NodeProto, str]]:
         """Return (cast_node, value_tensor) when one Mul input is a Cast, else None."""
+        if len(mul.input) != 2:
+            return None
         for idx in (0, 1):
             cand = producer.get(mul.input[idx])
             if cand is not None and cand.op_type == "Cast":
@@ -603,8 +605,10 @@ def collapse_select_to_where(model: onnx.ModelProto) -> tuple[onnx.ModelProto, i
 
     def cast_source(cast: onnx.NodeProto) -> tuple[str, str, Optional[onnx.NodeProto]]:
         """Classify a Cast's condition source as a direct cond or Not(cond)."""
+        if not cast.input:
+            return "direct", "", None
         src = producer.get(cast.input[0])
-        if src is not None and src.op_type == "Not":
+        if src is not None and src.op_type == "Not" and src.input:
             return "not", src.input[0], src
         return "direct", cast.input[0], None
 
@@ -615,7 +619,7 @@ def collapse_select_to_where(model: onnx.ModelProto) -> tuple[onnx.ModelProto, i
     consumed: set[str] = set()
 
     for add in graph.node:
-        if add.op_type != "Add" or len(add.input) != 2:
+        if add.op_type != "Add" or len(add.input) != 2 or not add.output:
             continue
         mul_a = producer.get(add.input[0])
         mul_b = producer.get(add.input[1])
