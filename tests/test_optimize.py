@@ -448,10 +448,13 @@ def test_fp16_keep_activations_fp32_blocks_only_swish():
 
     assert cast_count(kept) > cast_count(default), "activation boundary casts expected"
 
-    # The Swish Sigmoid output runs in FP32.
+    # Both halves of the Swish pair (Sigmoid and the gated Mul) run in FP32, so
+    # ORT can fuse them; checking only the Sigmoid would miss a Mul-only regression.
     vi = {v.name: v.type.tensor_type.elem_type for v in kept.graph.value_info}
     sig = next(n for n in kept.graph.node if n.op_type == "Sigmoid")
     assert vi.get(sig.output[0]) == onnx.TensorProto.FLOAT, "Sigmoid must stay FP32"
+    act_mul = next(n for n in kept.graph.node if n.name == "act_mul")
+    assert vi.get(act_mul.output[0]) == onnx.TensorProto.FLOAT, "gated Mul must stay FP32"
 
 
 def test_fp16_protects_spectrogram_matmuls_on_real_model(optimized_fp32_path: Path):
