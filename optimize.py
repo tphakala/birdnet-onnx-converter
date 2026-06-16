@@ -1307,19 +1307,49 @@ def convert_to_fp16(
     return model_fp16  # type: ignore[no-any-return]
 
 
+def prepare_for_quantization(model_path: str, prepared_path: str) -> list[str]:
+    """Refresh shape metadata before quantization and return nodes to exclude.
+
+    Writes a quantization-ready copy of the model to prepared_path and returns
+    the spectrogram preprocessing node names that must be kept in full precision.
+
+    Two problems are addressed:
+    - The optimization passes (DFT/RFFT replacement, transpose fusion, reshape
+      removal, etc.) leave stale value_info behind. quantize_dynamic relies on
+      value_info to type tensors, so it is cleared and re-inferred here.
+    - INT8-quantizing the mel/STFT MatMuls corrupts the spectrogram and collapses
+      predictions, so the preprocessing front-end is reported for exclusion.
+    """
+    model = onnx.load(model_path)
+    exclude = sorted(find_preprocessing_node_names(model))
+    del model.graph.value_info[:]
+    try:
+        model = onnx.shape_inference.infer_shapes(model)
+    except Exception as e:
+        print(f"  Warning: shape inference before quantization failed: {e}")
+    onnx.save(model, prepared_path)
+    return exclude
+
+
 def quantize_to_int8_dynamic(model_path: str, output_path: str) -> bool:
     """Apply INT8 dynamic quantization for CPU inference on low-power devices.
 
     Dynamic quantization quantizes weights to INT8 and computes activations
-    in INT8 at runtime. Uses QUInt8 weights for better ARM support.
+    in INT8 at runtime. Uses QUInt8 weights for better ARM support. The
+    spectrogram preprocessing is excluded so it stays full precision.
     """
+    prepared_path = output_path + ".prep.onnx"
     try:
         from onnxruntime.quantization import QuantType, quantize_dynamic
 
+        exclude = prepare_for_quantization(model_path, prepared_path)
+        if exclude:
+            print(f"  Excluding {len(exclude)} preprocessing node(s) from INT8")
         quantize_dynamic(
-            model_path,
+            prepared_path,
             output_path,
             weight_type=QuantType.QUInt8,
+            nodes_to_exclude=exclude or None,
             extra_options={"ActivationSymmetric": False},
         )
         print("  INT8 dynamic quantization succeeded")
@@ -1327,22 +1357,30 @@ def quantize_to_int8_dynamic(model_path: str, output_path: str) -> bool:
     except Exception as e:
         print(f"  INT8 quantization failed: {e}")
         return False
+    finally:
+        Path(prepared_path).unlink(missing_ok=True)
 
 
 def quantize_to_int8_arm(model_path: str, output_path: str) -> bool:
     """Apply INT8 quantization optimized for ARM devices.
 
     Only quantizes MatMul operations (not Conv) to avoid ConvInteger ops
-    which are not supported on ARM ONNX Runtime builds.
+    which are not supported on ARM ONNX Runtime builds. The spectrogram
+    preprocessing MatMuls are excluded so they stay full precision.
     """
+    prepared_path = output_path + ".prep.onnx"
     try:
         from onnxruntime.quantization import QuantType, quantize_dynamic
 
+        exclude = prepare_for_quantization(model_path, prepared_path)
+        if exclude:
+            print(f"  Excluding {len(exclude)} preprocessing node(s) from INT8")
         quantize_dynamic(
-            model_path,
+            prepared_path,
             output_path,
             weight_type=QuantType.QUInt8,
             op_types_to_quantize=["MatMul"],
+            nodes_to_exclude=exclude or None,
             extra_options={"ActivationSymmetric": False},
         )
         print("  INT8 ARM quantization succeeded (MatMul only)")
@@ -1350,6 +1388,8 @@ def quantize_to_int8_arm(model_path: str, output_path: str) -> bool:
     except Exception as e:
         print(f"  INT8 ARM quantization failed: {e}")
         return False
+    finally:
+        Path(prepared_path).unlink(missing_ok=True)
 
 
 def optimize_model(
