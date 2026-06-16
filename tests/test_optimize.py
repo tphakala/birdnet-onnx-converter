@@ -507,3 +507,15 @@ def test_int8_arm_keeps_spectrogram_matmuls_full_precision(
         assert any(init_types.get(i) == onnx.TensorProto.FLOAT for i in node.input), (
             f"{name} weights must remain FP32"
         )
+
+
+def test_int8_experimental_warning_states_risk():
+    """The INT8 warning surfaced at runtime must flag the accuracy risk and the
+    opt-out, so users do not ship a silently-degraded model."""
+    from optimize import INT8_EXPERIMENTAL_WARNING
+
+    text = INT8_EXPERIMENTAL_WARNING.lower()
+    assert "experimental" in text
+    assert "accuracy" in text
+    assert "--no-int8" in text
+    assert "fp16" in text

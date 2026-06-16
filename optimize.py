@@ -22,7 +22,8 @@ Output formats:
 - FP16: Half precision for devices with FP16 hardware (RPi 5, modern GPUs). The
   spectrogram preprocessing front-end is kept in FP32 by default for accuracy;
   use --fp16-full to convert the entire graph.
-- INT8: Quantized for low-power devices (RPi 3/4, embedded ARM)
+- INT8: Quantized for low-power devices (RPi 3/4, embedded ARM). Experimental:
+  dynamic quantization can significantly degrade accuracy; validate before use.
 
 Usage:
     # Output all three formats (FP32, FP16, INT8)
@@ -43,6 +44,7 @@ Requirements:
 """
 
 import argparse
+import textwrap
 from itertools import chain
 from pathlib import Path
 from typing import Optional
@@ -50,6 +52,16 @@ from typing import Optional
 import numpy as np
 import onnx
 from onnx import helper, numpy_helper
+
+# Surfaced whenever an INT8 model is produced. INT8 dynamic quantization is
+# experimental: it can shift confidences enough to change the top predicted
+# species, so it must be validated against FP32/FP16 before deployment.
+INT8_EXPERIMENTAL_WARNING = (
+    "INT8 quantization is EXPERIMENTAL and not recommended for production. "
+    "Dynamic quantization can significantly degrade accuracy and may change the "
+    "top predicted species. Validate INT8 output against FP32/FP16 before "
+    "deploying, and prefer FP16 where the target supports it. Use --no-int8 to skip."
+)
 
 
 def create_dft_matrix(fft_size: int) -> np.ndarray:
@@ -1350,7 +1362,7 @@ def _quantize_int8(
     temporary prepared model. op_types_to_quantize restricts which op types are
     quantized (the ARM path passes ["MatMul"]).
     """
-    prepared_path = output_path + ".prep.onnx"
+    prepared_path = f"{output_path}.prep.onnx"  # f-string tolerates str or Path
     try:
         from onnxruntime.quantization import QuantType, quantize_dynamic
 
@@ -1629,6 +1641,12 @@ def main():
         print("\n[FP16] Skipped (--no-fp16)")
 
     # Quantize to INT8
+    if not args.no_int8 or args.int8_arm:
+        print(f"\n{'!' * 60}")
+        for line in textwrap.wrap(INT8_EXPERIMENTAL_WARNING, width=58):
+            print(f"  {line}")
+        print(f"{'!' * 60}")
+
     if not args.no_int8:
         print("\n[INT8] Quantizing to INT8...")
         success = quantize_to_int8_dynamic(fp32_path, int8_path)
@@ -1664,18 +1682,18 @@ def main():
     if fp16_size is not None:
         print(f"  FP16:   {fp16_size:.2f} MB  ({fp16_path})")
     if int8_size is not None:
-        print(f"  INT8:   {int8_size:.2f} MB  ({int8_path})")
+        print(f"  INT8:   {int8_size:.2f} MB  ({int8_path})  [experimental]")
     if int8_arm_size is not None:
-        print(f"  INT8-ARM: {int8_arm_size:.2f} MB  ({int8_arm_path})")
+        print(f"  INT8-ARM: {int8_arm_size:.2f} MB  ({int8_arm_path})  [experimental]")
 
     print(f"\n{'=' * 60}")
     print(f"{'RECOMMENDED USAGE':^60}")
     print(f"{'=' * 60}")
     print("  GPU (CUDA/TensorRT):  Use FP32 or FP16")
     print("  RPi 5 (FP16 support): Use FP16 for ~2x speedup")
-    print("  RPi 3/4 (no FP16):    Use INT8-ARM for best performance")
-    print("  Desktop CPU (Intel):  Use FP32 or INT8")
-    print("  Desktop CPU (ARM):    Use INT8-ARM")
+    print("  RPi 3/4 (no FP16):    Use INT8-ARM (experimental; validate accuracy)")
+    print("  Desktop CPU (Intel):  Use FP32 (INT8 is experimental; validate accuracy)")
+    print("  Desktop CPU (ARM):    Use INT8-ARM (experimental; validate accuracy)")
 
     return 0
 

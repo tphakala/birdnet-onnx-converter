@@ -88,12 +88,17 @@ python optimize.py --input perch_v2.onnx --output perch_v2_lite --perch \
 | ---- | ----------- | --------------- |
 | `*_fp32.onnx` | Full precision | GPU (CUDA/TensorRT), Desktop CPU |
 | `*_fp16.onnx` | Half precision | RPi 5, Modern GPUs |
-| `*_int8.onnx` | INT8 dynamic quantization | Low-power x86 CPU |
-| `*_int8_arm.onnx` | INT8, MatMul only (`--int8-arm`) | RPi 3/4, ARM CPU |
+| `*_int8.onnx` | INT8 dynamic quantization (experimental) | Low-power x86 CPU |
+| `*_int8_arm.onnx` | INT8, MatMul only, `--int8-arm` (experimental) | RPi 3/4, ARM CPU |
 
 For both FP16 and INT8, the spectrogram preprocessing front-end (STFT/mel
 MatMuls and normalization) is kept in full precision to preserve accuracy;
 only the CNN backbone is reduced.
+
+> **INT8 is experimental and not recommended for production.** Dynamic
+> quantization can significantly degrade accuracy and may change the top
+> predicted species. Always validate INT8 output against FP32/FP16, and prefer
+> FP16 where the target supports it. Pass `--no-int8` to skip INT8.
 
 ## Key Optimizations
 
