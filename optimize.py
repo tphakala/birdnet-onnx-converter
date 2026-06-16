@@ -45,6 +45,7 @@ Requirements:
 
 import argparse
 import textwrap
+from collections.abc import Callable
 from itertools import chain
 from pathlib import Path
 from typing import Optional
@@ -60,7 +61,8 @@ INT8_EXPERIMENTAL_WARNING = (
     "INT8 quantization is EXPERIMENTAL and not recommended for production. "
     "Dynamic quantization can significantly degrade accuracy and may change the "
     "top predicted species. Validate INT8 output against FP32/FP16 before "
-    "deploying, and prefer FP16 where the target supports it. Use --no-int8 to skip."
+    "deploying, and prefer FP16 where the target supports it. Use --no-int8 (and "
+    "omit --int8-arm) to skip."
 )
 
 
@@ -1362,7 +1364,7 @@ def _quantize_int8(
     temporary prepared model. op_types_to_quantize restricts which op types are
     quantized (the ARM path passes ["MatMul"]).
     """
-    prepared_path = f"{output_path}.prep.onnx"  # f-string tolerates str or Path
+    prepared_path = f"{output_path}.prep.onnx"
     try:
         from onnxruntime.quantization import QuantType, quantize_dynamic
 
@@ -1550,6 +1552,26 @@ def optimize_model(
     return model
 
 
+def _print_int8_warning(
+    no_int8: bool, int8_arm: bool, out: Callable[[str], object] = print
+) -> bool:
+    """Emit the INT8 experimental warning when an INT8 variant will be produced.
+
+    Mirrors main()'s production condition: a warning fires iff the default INT8
+    model (unless --no-int8) or the ARM INT8 model (--int8-arm) is produced.
+    Returns True when the warning was emitted (kept testable via `out`).
+    """
+    if no_int8 and not int8_arm:
+        return False
+    out(f"\n{'!' * 60}")
+    for line in textwrap.wrap(
+        INT8_EXPERIMENTAL_WARNING, width=58, break_on_hyphens=False, break_long_words=False
+    ):
+        out(f"  {line}")
+    out(f"{'!' * 60}")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Optimize BirdNET ONNX model for GPU and embedded devices"
@@ -1641,11 +1663,7 @@ def main():
         print("\n[FP16] Skipped (--no-fp16)")
 
     # Quantize to INT8
-    if not args.no_int8 or args.int8_arm:
-        print(f"\n{'!' * 60}")
-        for line in textwrap.wrap(INT8_EXPERIMENTAL_WARNING, width=58):
-            print(f"  {line}")
-        print(f"{'!' * 60}")
+    _print_int8_warning(args.no_int8, args.int8_arm)
 
     if not args.no_int8:
         print("\n[INT8] Quantizing to INT8...")
