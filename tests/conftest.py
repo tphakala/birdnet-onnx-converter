@@ -54,6 +54,37 @@ def test_audio_path(fixtures_dir: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
+def audio_input(fixtures_dir: Path):
+    """Return a deterministic (1, 144000) float32 BirdNET input.
+
+    Uses the real test audio when present, otherwise falls back to seeded noise
+    so inference tests stay runnable and reproducible without the WAV asset.
+
+    Assumes 16-bit PCM at 48 kHz and does not resample (it pads/truncates to
+    144000 samples = 3 s). The array is session-scoped and shared; consumers must
+    not mutate it in place.
+    """
+    import wave
+
+    import numpy as np
+
+    samples = 48000 * 3  # BirdNET v2.4: 3 s at 48 kHz
+    path = fixtures_dir / "test_audio.wav"
+    if path.exists():
+        with wave.open(str(path), "rb") as w:
+            channels = w.getnchannels()
+            assert w.getsampwidth() == 2, "test audio must be 16-bit PCM"
+            raw = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+        audio = raw.astype(np.float32) / 32768.0
+        if channels > 1:
+            audio = audio.reshape(-1, channels).mean(axis=1)
+    else:
+        audio = np.random.default_rng(42).standard_normal(samples).astype(np.float32) * 0.1
+    audio = np.pad(audio, (0, max(0, samples - len(audio))))[:samples]
+    return audio.reshape(1, samples).astype(np.float32)
+
+
+@pytest.fixture(scope="session")
 def baseline_predictions_path(fixtures_dir: Path) -> Path:
     """Return path to baseline predictions fixture."""
     path = fixtures_dir / "baseline_predictions.csv"

@@ -98,7 +98,8 @@ only the CNN backbone is reduced.
 > **INT8 is experimental and not recommended for production.** Dynamic
 > quantization can significantly degrade accuracy and may change the top
 > predicted species. Always validate INT8 output against FP32/FP16, and prefer
-> FP16 where the target supports it. Pass `--no-int8` to skip INT8.
+> FP16 where the target supports it. Pass `--no-int8` (and omit `--int8-arm`) to
+> skip INT8.
 
 ## Key Optimizations
 
