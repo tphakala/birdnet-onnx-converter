@@ -68,13 +68,16 @@ def audio_input(fixtures_dir: Path):
 
     import numpy as np
 
-    samples = 48000 * 3  # BirdNET v2.4: 3 s at 48 kHz
+    rate = 48000
+    samples = rate * 3  # BirdNET v2.4: 3 s at 48 kHz
     path = fixtures_dir / "test_audio.wav"
     if path.exists():
         with wave.open(str(path), "rb") as w:
             channels = w.getnchannels()
             assert w.getsampwidth() == 2, "test audio must be 16-bit PCM"
-            raw = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+            assert w.getframerate() == rate, f"test audio must be {rate} Hz (no resampling)"
+            # WAV/RIFF is little-endian; '<i2' decodes correctly on any host.
+            raw = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2")
         audio = raw.astype(np.float32) / 32768.0
         if channels > 1:
             audio = audio.reshape(-1, channels).mean(axis=1)
