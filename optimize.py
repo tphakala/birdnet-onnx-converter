@@ -609,7 +609,10 @@ def collapse_select_to_where(model: onnx.ModelProto) -> tuple[onnx.ModelProto, i
         return "direct", cast.input[0], None
 
     replacements: list[tuple[list[onnx.NodeProto], onnx.NodeProto]] = []
-    consumed: set[int] = set()
+    # Identify nodes by their (unique) first output tensor name rather than id():
+    # protobuf may hand back fresh wrapper objects per repeated-field access, so
+    # object identity is not stable across iterations of graph.node.
+    consumed: set[str] = set()
 
     for add in graph.node:
         if add.op_type != "Add" or len(add.input) != 2:
@@ -620,7 +623,7 @@ def collapse_select_to_where(model: onnx.ModelProto) -> tuple[onnx.ModelProto, i
             continue
         if mul_a.op_type != "Mul" or mul_b.op_type != "Mul":
             continue
-        if id(mul_a) in consumed or id(mul_b) in consumed:
+        if mul_a.output[0] in consumed or mul_b.output[0] in consumed:
             continue
         split_a = split_mul(mul_a)
         split_b = split_mul(mul_b)
@@ -656,13 +659,15 @@ def collapse_select_to_where(model: onnx.ModelProto) -> tuple[onnx.ModelProto, i
         cluster = [add, mul_a, mul_b, cast_a, cast_b, not_node]
         replacements.append((cluster, where))
         for node in cluster:
-            consumed.add(id(node))
+            consumed.add(node.output[0])
 
     if not replacements:
         return model, 0
 
-    remove_ids = {id(node) for cluster, _ in replacements for node in cluster}
-    kept = [node for node in graph.node if id(node) not in remove_ids]
+    remove_outputs = {
+        node.output[0] for cluster, _ in replacements for node in cluster if node.output
+    }
+    kept = [node for node in graph.node if not (node.output and node.output[0] in remove_outputs)]
     kept.extend(where for _, where in replacements)
 
     # Topological sort: emit a node only once all of its inputs are available.
