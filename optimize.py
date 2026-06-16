@@ -1127,8 +1127,7 @@ def decouple_dual_role_outputs(model: onnx.ModelProto) -> int:
 
         # A graph output with no producing node (e.g. an input passthrough) has
         # no fp16 boundary to corrupt; leave it for the sentinel to handle.
-        producer = find_node_by_output(model, original)
-        if producer is None:
+        if find_node_by_output(model, original) is None:
             continue
 
         internal = f"{original}_fp16src"
@@ -1150,13 +1149,16 @@ def decouple_dual_role_outputs(model: onnx.ModelProto) -> int:
         # Re-expose `original` as the graph output via Identity, inserted right
         # after its producer so the graph stays topologically sorted regardless
         # of where the original consumers (including any subgraph captures) sit.
+        # Locate the producer by the unique `internal` name it now emits rather
+        # than by object identity, which protobuf does not guarantee across
+        # repeated-field accesses (the C++/upb backend returns fresh wrappers).
         identity = onnx.helper.make_node(
             "Identity",
             inputs=[internal],
             outputs=[original],
             name=f"_fp16_decoupler_{original}",
         )
-        producer_idx = next(i for i, n in enumerate(model.graph.node) if n is producer)
+        producer_idx = next(i for i, n in enumerate(model.graph.node) if internal in n.output)
         model.graph.node.insert(producer_idx + 1, identity)
         decoupled += 1
 
