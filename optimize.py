@@ -991,7 +991,7 @@ def count_ops(model: onnx.ModelProto) -> dict[str, int]:
     return dict(Counter(node.op_type for node in model.graph.node))
 
 
-def fix_fp16_type_mismatches(model: onnx.ModelProto) -> int:
+def fix_fp16_type_mismatches(model: onnx.ModelProto) -> tuple[int, int]:
     """Fix type mismatches introduced by keep_io_types Cast insertion.
 
     After FP16 conversion with keep_io_types=True, the converter inserts Cast
@@ -999,6 +999,10 @@ def fix_fp16_type_mismatches(model: onnx.ModelProto) -> int:
     by internal nodes (like MatMul) whose other inputs are fp16, we get a type
     mismatch. Fix by rewiring internal consumers to use the pre-Cast fp16 tensor.
     Also fix value_info entries that disagree with Cast output types.
+
+    Returns (rewires, value_info_fixes). With decouple_dual_role_outputs run
+    beforehand, rewires should be 0 (a non-zero count means a mixed-type op
+    survived decoupling); value_info_fixes are harmless annotation corrections.
     """
     # Map Cast(to=FLOAT) outputs to their fp16 inputs
     cast_fp32_output_to_fp16_input: dict[str, str] = {}
@@ -1017,7 +1021,8 @@ def fix_fp16_type_mismatches(model: onnx.ModelProto) -> int:
     init_types = {init.name: init.data_type for init in model.graph.initializer}
     vi_types = {vi.name: vi.type.tensor_type.elem_type for vi in model.graph.value_info}
 
-    fixed = 0
+    rewires = 0
+    vi_fixes = 0
 
     # Rewire internal nodes that consume a Cast(to=FLOAT) output alongside fp16 inputs
     for node in model.graph.node:
@@ -1043,7 +1048,7 @@ def fix_fp16_type_mismatches(model: onnx.ModelProto) -> int:
                 new_inputs[i] = pre_cast
                 changed = True
                 print(f"    Rewired {node.name} ({node.op_type}): {inp} -> {pre_cast}")
-                fixed += 1
+                rewires += 1
 
         if changed:
             del node.input[:]
@@ -1072,18 +1077,101 @@ def fix_fp16_type_mismatches(model: onnx.ModelProto) -> int:
                 new_name = onnx.TensorProto.DataType.Name(expected_type)
                 vi.type.tensor_type.elem_type = expected_type
                 print(f"    Fixed value_info: {vi.name} ({old_name} -> {new_name})")
-                fixed += 1
+                vi_fixes += 1
 
-    return fixed
+    return rewires, vi_fixes
+
+
+def decouple_dual_role_outputs(model: onnx.ModelProto) -> int:
+    """Insert an Identity boundary for graph outputs that are also consumed internally.
+
+    onnxconverter-common's keep_io_types inserts a Cast (fp16->fp32) at every
+    graph output and reuses the original tensor name for the Cast output. When a
+    tensor is BOTH a graph output and an internal node input (a "dual-role"
+    tensor, e.g. pooled embeddings that are also fed to a classifier MatMul), the
+    Cast silently rewires the internal consumers to fp32, producing mixed-precision
+    ops (a MatMul with one fp16 and one fp32 input).
+
+    This fixes the problem preventively. For each dual-role tensor T, the
+    producer output and all internal consumers are repointed to a private name,
+    and T is re-exposed through an Identity node. The external output name is
+    preserved (consumers that look up outputs by name keep working), while T
+    becomes a clean single-producer graph output that keep_io_types handles
+    correctly without touching the internal consumers.
+
+    Must run before float16 conversion. Returns the number of outputs decoupled.
+    """
+    # Names of tensors consumed by any node (graph outputs are not node inputs).
+    consumed: set[str] = set()
+    for node in model.graph.node:
+        for inp in node.input:
+            if inp:
+                consumed.add(inp)
+
+    # All tensor names in use, so minted internal names cannot collide.
+    used: set[str] = set(consumed)
+    used.update(init.name for init in model.graph.initializer)
+    for node in model.graph.node:
+        used.update(o for o in node.output if o)
+    for value in list(model.graph.input) + list(model.graph.output):
+        used.add(value.name)
+
+    decoupled = 0
+    for out in model.graph.output:
+        original = out.name
+        if original not in consumed:
+            continue  # terminal-only output, nothing to decouple
+
+        # A graph output with no producing node (e.g. an input passthrough) has
+        # no fp16 boundary to corrupt; leave it for the sentinel to handle.
+        if not any(original in node.output for node in model.graph.node):
+            continue
+
+        internal = f"{original}_fp16src"
+        suffix = 1
+        while internal in used:
+            suffix += 1
+            internal = f"{original}_fp16src{suffix}"
+        used.add(internal)
+
+        # Repoint the producer(s) of `original` to emit `internal` instead.
+        for node in model.graph.node:
+            for i, name in enumerate(node.output):
+                if name == original:
+                    node.output[i] = internal
+        # Repoint internal consumers of `original` to read `internal`.
+        for node in model.graph.node:
+            for i, name in enumerate(node.input):
+                if name == original:
+                    node.input[i] = internal
+
+        # Re-expose `original` as the graph output via Identity (appended last so
+        # it stays after its `internal` producer in topological order).
+        model.graph.node.append(
+            onnx.helper.make_node(
+                "Identity",
+                inputs=[internal],
+                outputs=[original],
+                name=f"_fp16_decoupler_{original}",
+            )
+        )
+        decoupled += 1
+
+    return decoupled
 
 
 def convert_to_fp16(model: onnx.ModelProto) -> Optional[onnx.ModelProto]:
     """Convert FP32 model to FP16 for devices with FP16 hardware support.
 
-    Uses onnxconverter-common for reliable FP16 conversion, then fixes any
-    remaining type mismatches from keep_io_types Cast insertion on multi-output
-    models.
+    Decouples dual-role outputs first so keep_io_types Cast insertion cannot
+    corrupt internal consumers, then uses onnxconverter-common for the FP16
+    conversion. fix_fp16_type_mismatches is kept as a sentinel and should report
+    zero fixes once decoupling has run.
     """
+    decoupled = decouple_dual_role_outputs(model)
+    if decoupled > 0:
+        print(f"  Decoupled {decoupled} dual-role output(s) before FP16 conversion")
+
     try:
         from onnxconverter_common import float16
 
@@ -1106,9 +1194,14 @@ def convert_to_fp16(model: onnx.ModelProto) -> Optional[onnx.ModelProto]:
         print(f"  FP16 conversion failed: {e}")
         return None
 
-    fixed = fix_fp16_type_mismatches(model_fp16)
-    if fixed > 0:
-        print(f"  Fixed {fixed} type mismatch(es) from keep_io_types")
+    rewires, vi_fixes = fix_fp16_type_mismatches(model_fp16)
+    if rewires > 0:
+        print(
+            f"  WARNING: rewired {rewires} residual mixed-type op(s); decoupling "
+            "should have prevented these"
+        )
+    if vi_fixes > 0:
+        print(f"  Corrected {vi_fixes} stale value_info annotation(s)")
 
     return model_fp16  # type: ignore[no-any-return]
 
