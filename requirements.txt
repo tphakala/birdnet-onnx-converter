@@ -1,5 +1,5 @@
 # Core dependencies
-onnx>=1.14.0
+onnx>=1.19.1
 numpy>=1.21.0
 onnxruntime>=1.16.0
 
