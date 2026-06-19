@@ -2,7 +2,7 @@
 pytest>=8.4.2
 
 # Linting
-ruff>=0.1.0
+ruff>=0.15.18
 
 # Type checking
 mypy>=1.19.1
