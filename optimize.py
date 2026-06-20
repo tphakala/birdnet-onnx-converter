@@ -1803,7 +1803,13 @@ def main():
     )
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantization")
     parser.add_argument(
-        "--int8-arm", action="store_true", help="Also create ARM-compatible INT8 model"
+        "--int8-arm",
+        action="store_true",
+        help=(
+            "Create partial INT8 (dynamic, MatMul weights only; spectrogram "
+            "front-end kept FP32). Lowest RAM on ARM (Perch v2: ~816->293 MB RSS, "
+            "top-1 preserved on real audio); independent of --no-int8. Validate accuracy."
+        ),
     )
     parser.add_argument(
         "--prune-outputs",
@@ -1944,11 +1950,14 @@ def main():
     print(f"\n{'=' * 60}")
     print(f"{'RECOMMENDED USAGE':^60}")
     print(f"{'=' * 60}")
-    print("  GPU (CUDA/TensorRT):  Use FP32 or FP16")
-    print("  RPi 5 (FP16 support): Use FP16 for ~2x speedup")
-    print("  RPi 3/4 (no FP16):    Use INT8-ARM (experimental; validate accuracy)")
-    print("  Desktop CPU (Intel):  Use FP32 (INT8 is experimental; validate accuracy)")
-    print("  Desktop CPU (ARM):    Use INT8-ARM (experimental; validate accuracy)")
+    print("  GPU (CUDA/TensorRT):    Use FP32 or FP16")
+    print("  RPi 4/5, low RAM:       Use INT8-ARM (partial, MatMul-only): large RSS cut")
+    print("                          with top-1 preserved on Perch v2; validate on real audio")
+    print("  RPi 5, speed over RAM:  FP16 (add --fp16-keep-activations-fp32 on complex graphs)")
+    print("  Desktop CPU (Intel):    Use FP32")
+    print("  Desktop CPU (ARM):      Use INT8-ARM (validate accuracy)")
+    print("")
+    print("  Partial-INT8 only:  --perch --no-fp16 --no-int8 --int8-arm")
 
     return 0
 
