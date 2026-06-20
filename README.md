@@ -16,10 +16,15 @@ Convert and optimize BirdNET models for ONNX Runtime inference on various platfo
     the entire graph. On ARM/CPU, `--fp16-keep-activations-fp32` keeps the
     Swish/SiLU activations in FP32 so ONNX Runtime's CPU EP can fuse QuickGelu,
     recovering most of the FP16 latency (weights stay FP16; small runtime-RAM cost).
-  - INT8 - Dynamic quantization for low-power CPUs (experimental; validate
-    accuracy before use). The spectrogram preprocessing is excluded so it stays
-    full precision. `--int8-arm` quantizes only MatMul ops (skipping Conv) to
-    avoid ConvInteger kernels that ARM ONNX Runtime builds do not support.
+  - INT8 - Dynamic quantization to cut RAM (no calibration data needed). The
+    spectrogram preprocessing is excluded so it stays full precision.
+    `--int8-arm` is the recommended variant: it quantizes only MatMul weights
+    (skipping Conv, whose ConvInteger kernels ARM ONNX Runtime builds do not
+    support). On Perch v2 (RPi 5 / A76) it cuts peak RSS ~64% (816 -> 293 MB)
+    and ~34% CPU with top-1 preserved on real audio. The default all-ops INT8
+    (`*_int8.onnx`) also quantizes Conv and is unusable on ARM (accuracy
+    collapses); use it only on x86, and validate. Always check accuracy against
+    FP32 before relying on any INT8 model.
 
 ## Installation
 
@@ -93,6 +98,11 @@ python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-keep-activ
 # Perch v2: preserve multi-output naming, include ARM-optimized INT8
 python optimize.py --input perch_v2.onnx --output perch_v2 --perch --int8-arm
 
+# Perch v2: produce ONLY the partial INT8 (MatMul-only) model for low-RAM ARM
+# (~64% less RSS, top-1 preserved; --int8-arm runs independently of --no-int8)
+python optimize.py --input perch_v2.onnx --output perch_v2 --perch \
+    --no-fp16 --no-int8 --int8-arm
+
 # Perch v2: prune unused outputs (keep only embeddings and labels)
 python optimize.py --input perch_v2.onnx --output perch_v2_lite --perch \
     --prune-outputs embedding,label
@@ -111,18 +121,20 @@ python optimize.py --input mdata_raw.onnx --output mdata_where.onnx \
 | ---- | ----------- | --------------- |
 | `*_fp32.onnx` | Full precision | GPU (CUDA/TensorRT), Desktop CPU |
 | `*_fp16.onnx` | Half precision | RPi 5, Modern GPUs |
-| `*_int8.onnx` | INT8 dynamic quantization (experimental) | Low-power x86 CPU |
-| `*_int8_arm.onnx` | INT8, MatMul only, `--int8-arm` (experimental) | RPi 3/4, ARM CPU |
+| `*_int8.onnx` | INT8 dynamic, all ops (Conv int8 breaks ARM accuracy) | x86 CPU only, validate |
+| `*_int8_arm.onnx` | Partial INT8 (MatMul-only, front-end FP32), `--int8-arm` | RPi 4/5 / ARM, low RAM (recommended) |
 
 For both FP16 and INT8, the spectrogram preprocessing front-end (STFT/mel
 MatMuls and normalization) is kept in full precision to preserve accuracy;
 only the CNN backbone is reduced.
 
-> **INT8 is experimental and not recommended for production.** Dynamic
-> quantization can significantly degrade accuracy and may change the top
-> predicted species. Always validate INT8 output against FP32/FP16, and prefer
-> FP16 where the target supports it. Pass `--no-int8` (and omit `--int8-arm`) to
-> skip INT8.
+> **Validate INT8 accuracy before production.** The all-ops INT8 model
+> (`*_int8.onnx`) quantizes Conv layers and collapses accuracy on ARM (it has no
+> usable ConvInteger kernels there); keep it to x86 and validate first. The
+> partial `--int8-arm` model (MatMul-only, front-end FP32) is the safe RAM lever:
+> validated top-1-preserving on Perch v2 and BirdNET v2.4, with large RSS savings
+> and no calibration data. Still confirm top-k against FP32 on your own audio.
+> Pass `--no-int8` (and omit `--int8-arm`) to skip INT8 entirely.
 
 ## Key Optimizations
 
@@ -165,19 +177,24 @@ This tool supports conversion and optimization of:
 
 ### Raspberry Pi 5
 
-Use FP16 model for best performance:
+For low RAM, use the partial INT8 (`--int8-arm`) model: on Perch v2 it cuts peak
+RSS ~64% (816 -> 293 MB) with top-1 preserved. For lowest latency where RAM is
+not tight, use FP16 (regenerate with `--fp16-keep-activations-fp32` on complex
+graphs such as Perch):
 
 ```python
 import onnxruntime as ort
-session = ort.InferenceSession("BirdNET_fp16.onnx")
+session = ort.InferenceSession("perch_v2_int8_arm.onnx")  # low RAM
+# session = ort.InferenceSession("BirdNET_fp16.onnx")     # low latency
 ```
 
 ### Raspberry Pi 3/4
 
-Use FP32 model (FP16 not natively supported):
+No native FP16. Use the partial INT8 (`--int8-arm`) model for low RAM, otherwise
+FP32:
 
 ```python
-session = ort.InferenceSession("BirdNET_fp32.onnx")
+session = ort.InferenceSession("BirdNET_int8_arm.onnx")
 ```
 
 ### NVIDIA GPUs
