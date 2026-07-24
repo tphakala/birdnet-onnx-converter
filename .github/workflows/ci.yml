@@ -18,7 +18,11 @@ jobs:
           python-version: "3.11"
 
       - name: Install ruff
-        run: pip install ruff
+        # Pin to match the version the repo is formatted against. Unpinned, CI
+        # pulls the latest ruff (0.16.0 reformats Python inside markdown code
+        # blocks, e.g. README.md), which reddens main and every PR even when the
+        # Python sources are clean.
+        run: pip install ruff==0.15.13
 
       - name: Run ruff check
         run: ruff check .
