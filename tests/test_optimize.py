@@ -609,3 +609,81 @@ def test_int8_warning_emitted_only_when_int8_produced():
             text = "\n".join(captured).lower()
             assert "experimental" in text and "accuracy" in text
             assert "--no-int8" in text and "fp16" in text
+
+
+def _make_dft_mel_model(mel_weights):
+    """A minimal runnable DFT->mel graph: X[1,4,8] @ Wdft[8,5] -> Relu -> @ Wmel[5,M].
+
+    Wdft is a [F, F//2+1] cos/sin-style matrix in [-1, 1] (the DFT signature the
+    truncation pass matches); Wmel is the [B, M] mel filterbank whose all-zero rows
+    mark unused bins. M is kept != B//2+1 so the mel MatMul is not itself mistaken
+    for a DFT.
+    """
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    fft, bins, frames = 8, 5, 4
+    wdft = np.linspace(-1.0, 1.0, fft * bins, dtype=np.float32).reshape(fft, bins)
+    wmel = np.asarray(mel_weights, dtype=np.float32)
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, frames, fft])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [1, frames, wmel.shape[1]])
+    nodes = [
+        h.make_node("MatMul", ["X", "wdft"], ["spec"], name="dft_matmul"),
+        h.make_node("Relu", ["spec"], ["mag"], name="magnitude"),
+        h.make_node("MatMul", ["mag", "wmel"], ["out"], name="mel_matmul"),
+    ]
+    inits = [
+        numpy_helper.from_array(wdft, name="wdft"),
+        numpy_helper.from_array(wmel, name="wmel"),
+    ]
+    graph = h.make_graph(nodes, "dft_mel", [x], [out], inits)
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+    return model
+
+
+def test_truncate_dft_bins_drops_unused_bins_bit_exact():
+    """DFT columns the mel filterbank zeroes out are removed (weight shrinks and a
+    Pad restores the axis) while the graph output is numerically unchanged."""
+    import numpy as np
+    import onnxruntime as ort
+
+    from optimize import truncate_dft_bins
+
+    # mel filterbank [5, 2]: only bins 0,1,2 are used (rows 3,4 all zero)
+    mel = [[1.0, 0.0], [0.5, 0.5], [0.0, 1.0], [0.0, 0.0], [0.0, 0.0]]
+    model = _make_dft_mel_model(mel)
+    original = model.SerializeToString()
+
+    truncated, count = truncate_dft_bins(model)
+    assert count == 1
+
+    wdft = next(i for i in truncated.graph.initializer if i.name == "wdft")
+    assert list(wdft.dims) == [8, 3], "DFT weight should be truncated 5 -> 3 columns"
+    assert any(n.op_type == "Pad" for n in truncated.graph.node), "bin axis should be re-padded"
+
+    x = np.random.default_rng(0).standard_normal((1, 4, 8)).astype(np.float32)
+    base = ort.InferenceSession(original, providers=["CPUExecutionProvider"]).run(None, {"X": x})[0]
+    got = ort.InferenceSession(
+        truncated.SerializeToString(), providers=["CPUExecutionProvider"]
+    ).run(None, {"X": x})[0]
+    assert np.abs(base - got).max() < 1e-4
+
+
+def test_truncate_dft_bins_noop_when_all_bins_used():
+    """A filterbank that touches every bin leaves the graph unchanged (no-op)."""
+    from optimize import truncate_dft_bins
+
+    mel = [[1.0, 0.0], [0.0, 1.0], [0.3, 0.2], [0.1, 0.4], [0.2, 0.1]]
+    model = _make_dft_mel_model(mel)
+    _, count = truncate_dft_bins(model)
+    assert count == 0
+
+
+def test_truncate_dft_bins_noop_without_dft():
+    """A graph with no DFT-shaped MatMul is left untouched."""
+    from optimize import truncate_dft_bins
+
+    _, count = truncate_dft_bins(_make_preproc_conv_model())
+    assert count == 0
