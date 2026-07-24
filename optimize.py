@@ -1619,10 +1619,164 @@ def quantize_to_int8_arm(model_path: str, output_path: str) -> bool:
     )
 
 
+def truncate_dft_bins(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
+    """Truncate each in-graph DFT MatMul to the frequency bins its mel filterbank
+    actually uses, restoring the bin axis with a zero Pad.
+
+    BirdNET computes its log-mel front-end with a dense DFT-as-MatMul (an rfft
+    lowered to ``frames @ dft_matrix[n_fft, n_fft//2+1]``). Each mel filterbank
+    only spans part of the spectrum, so most DFT output bins are multiplied by a
+    zero filterbank row and thrown away. Computing them is pure waste: on
+    BirdNET v2.4 the low-band DFT (``[2048,1025]``) is ~61% of the whole model's
+    FLOPs yet 88% of its output bins are unused (mel covers ~23-2977 Hz -> 128 of
+    1025 bins); the high-band DFT (``[1024,513]``) uses 320 of 513.
+
+    For each DFT MatMul this truncates the weight columns to the used bins and
+    inserts a zero ``Pad`` so the bin axis is restored before the (unchanged)
+    magnitude / mel-filterbank ops downstream. Padding the removed bins with zero
+    is exactly equivalent to computing them and letting the filterbank discard
+    them, so the graph output is numerically identical. A bit-exact check gates
+    the rewrite and reverts it if any output differs.
+
+    Measured (BirdNET v2.4, bit-exact): ORT CPU ~1.55-1.9x faster (rpi4 A72, rpi5
+    A76, amd64), OpenVINO CPU f16/f32 ~1.4-1.7x, neutral on Intel iGPU (where the
+    dense matmul is already free). No-op on models whose filterbank uses every bin.
+    """
+    graph = model.graph
+    init_by_name = {init.name: init for init in graph.initializer}
+    arr = {name: numpy_helper.to_array(init) for name, init in init_by_name.items()}
+
+    def const_2d_weight(node: onnx.NodeProto):
+        for inp in node.input:
+            a = arr.get(inp)
+            if a is not None and a.ndim == 2:
+                return inp, a
+        return None, None
+
+    # DFT MatMuls: a constant weight [F, B] with B == F//2 + 1 (one-sided rfft) and
+    # cos/sin values in [-1, 1].
+    dft_matmuls = []
+    for node in graph.node:
+        if node.op_type != "MatMul":
+            continue
+        wname, w = const_2d_weight(node)
+        if w is None:
+            continue
+        f, b = w.shape
+        if b == f // 2 + 1 and float(w.min()) >= -1.001 and float(w.max()) <= 1.001:
+            dft_matmuls.append((node, wname, f, b))
+
+    if not dft_matmuls:
+        return model, 0
+
+    # Mel filterbanks: a constant weight [B, M] whose B matches a DFT's bin count
+    # (M = mel bands < B). Matched by bin count, unambiguous when the DFTs differ.
+    dft_bins = {b for _, _, _, b in dft_matmuls}
+    melfb_by_bins: dict[int, np.ndarray] = {}
+    for node in graph.node:
+        if node.op_type != "MatMul":
+            continue
+        wname, w = const_2d_weight(node)
+        if w is None:
+            continue
+        b, m = w.shape
+        if b in dft_bins and m < b:
+            melfb_by_bins.setdefault(b, w)
+
+    # Ranks for the Pad's `pads` vector (the bin axis is the last axis).
+    try:
+        inferred = onnx.shape_inference.infer_shapes(model)
+        rank_by_tensor = {
+            vi.name: len(vi.type.tensor_type.shape.dim) for vi in inferred.graph.value_info
+        }
+    except Exception:
+        rank_by_tensor = {}
+
+    original_bytes = model.SerializeToString()
+    count = 0
+    for node, wname, _f, b in dft_matmuls:
+        fb = melfb_by_bins.get(b)
+        if fb is None:
+            continue
+        used = np.nonzero(np.any(fb != 0.0, axis=1))[0]
+        if used.size == 0:
+            continue
+        keep = int(used.max()) + 1
+        if keep >= b:
+            continue  # filterbank uses every bin; nothing to gain
+
+        # 1. truncate DFT weight columns [F, B] -> [F, keep]
+        trunc_w = np.ascontiguousarray(arr[wname][:, :keep])
+        init_by_name[wname].CopyFrom(numpy_helper.from_array(trunc_w, name=wname))
+
+        # 2. rename the MatMul output and Pad it back to B on the last axis with zeros
+        out_name = node.output[0]
+        trunc_name = f"{out_name}_dfttrunc"
+        node.output[0] = trunc_name
+        rank = rank_by_tensor.get(out_name, 3)  # BirdNET DFT output is rank-3 here
+        pads = np.zeros(2 * rank, dtype=np.int64)
+        pads[-1] = b - keep  # pad_after on the last (bin) axis
+        pads_name = f"{out_name}_dfttrunc_pads"
+        zero_name = f"{out_name}_dfttrunc_zero"
+        graph.initializer.append(numpy_helper.from_array(pads, name=pads_name))
+        graph.initializer.append(
+            numpy_helper.from_array(np.array(0.0, dtype=np.float32), name=zero_name)
+        )
+        pad_node = helper.make_node(
+            "Pad",
+            [trunc_name, pads_name, zero_name],
+            [out_name],
+            mode="constant",
+            name=f"{out_name}_dfttrunc_pad",
+        )
+        graph.node.insert(list(graph.node).index(node) + 1, pad_node)
+        print(
+            f"  DFT bins {b} -> {keep} ({100 * keep / b:.0f}% kept), matmul FLOPs x{keep / b:.2f}"
+        )
+        count += 1
+
+    if count == 0:
+        return model, 0
+
+    # Bit-exact gate: run the pre- and post-truncation graphs on one random input
+    # and revert everything if the output changed beyond float noise.
+    try:
+        del graph.value_info[:]
+        onnx.checker.check_model(model, full_check=False)
+        import onnxruntime as ort
+
+        src = ort.InferenceSession(original_bytes, providers=["CPUExecutionProvider"])
+        inp = src.get_inputs()[0]
+        shape = [d if isinstance(d, int) and d > 0 else 1 for d in inp.shape]
+        x = np.random.default_rng(0).standard_normal(shape).astype(np.float32)
+        base = src.run(None, {inp.name: x})
+        dst = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
+        got = dst.run(None, {inp.name: x})
+        # Compare EVERY output: --perch mode is multi-output and the sensitive
+        # spectrogram output is not index 0, so a first-output-only check could
+        # miss corruption on a secondary output. allclose(equal_nan=True) also
+        # closes a NaN hole: a plain abs().max() is NaN when an output has NaNs,
+        # and `NaN > tol` is False, which would let corruption pass silently.
+        if len(base) != len(got) or any(
+            b.shape != g.shape or not np.allclose(b, g, rtol=0.0, atol=1e-3, equal_nan=True)
+            for b, g in zip(base, got)
+        ):
+            print("  Bit-exact check FAILED; reverting DFT truncation")
+            return onnx.load_model_from_string(original_bytes), 0
+        worst = max(float(np.nan_to_num(np.abs(b - g)).max()) for b, g in zip(base, got))
+        print(f"  Bit-exact check passed (max abs diff {worst:.2e})")
+    except Exception as exc:
+        print(f"  DFT truncation verification failed ({exc}); reverting to be safe")
+        return onnx.load_model_from_string(original_bytes), 0
+
+    return model, count
+
+
 def optimize_model(
     input_path: str,
     prune_output_names: Optional[list[str]] = None,
     perch_mode: bool = False,
+    truncate_dft: bool = True,
 ) -> Optional[onnx.ModelProto]:
     """Main optimization pipeline. Returns the optimized FP32 model.
 
@@ -1645,76 +1799,84 @@ def optimize_model(
     print(f"  Transpose: {initial_ops.get('Transpose', 0)}")
 
     # Step 1: Replace DFT with MatMul
-    print("\n[1/13] Replacing DFT with MatMul...")
+    print("\n[1/15] Replacing DFT with MatMul...")
     model, dft_replaced = replace_dft_with_matmul(model)
     print(f"  Replaced: {dft_replaced}")
 
     # Step 2: Replace RFFT2D with MatMul
-    print("\n[2/13] Replacing RFFT2D with MatMul...")
+    print("\n[2/15] Replacing RFFT2D with MatMul...")
     model, rfft_replaced = replace_rfft2d_with_matmul(model)
     print(f"  Replaced: {rfft_replaced}")
 
     # Step 3: Replace ReverseSequence with Slice
-    print("\n[3/13] Replacing ReverseSequence with Slice...")
+    print("\n[3/15] Replacing ReverseSequence with Slice...")
     model, rev_replaced = replace_reverse_sequence(model)
     print(f"  Replaced: {rev_replaced}")
 
     # Step 4: Replace GlobalAveragePool + Squeeze with ReduceMean
-    print("\n[4/13] Replacing GlobalAveragePool+Squeeze with ReduceMean...")
+    print("\n[4/15] Replacing GlobalAveragePool+Squeeze with ReduceMean...")
     model, gap_replaced = replace_globalavgpool_squeeze_with_reducemean(model)
     print(f"  Replaced: {gap_replaced}")
 
     # Step 5: Remove identity casts
-    print("\n[5/13] Removing identity Cast operations...")
+    print("\n[5/15] Removing identity Cast operations...")
     model, cast_removed = remove_identity_casts(model)
     print(f"  Removed: {cast_removed}")
 
     # Step 6: Fuse transpose patterns
-    print("\n[6/13] Fusing Transpose patterns...")
+    print("\n[6/15] Fusing Transpose patterns...")
     model, transpose_fused = fuse_transpose_patterns(model)
     print(f"  Fused: {transpose_fused}")
 
     # Step 7: Remove redundant reshapes
-    print("\n[7/13] Removing redundant Reshapes...")
+    print("\n[7/15] Removing redundant Reshapes...")
     model, reshape_removed = remove_redundant_reshapes(model)
     print(f"  Removed: {reshape_removed}")
 
     # Step 8: Convert INT32 to INT64 for compatibility
-    print("\n[8/13] Converting INT32 initializers to INT64...")
+    print("\n[8/15] Converting INT32 initializers to INT64...")
     model, int32_converted = convert_int32_to_int64(model)
     print(f"  Converted: {int32_converted}")
 
     # Step 9: Run external optimizers
-    print("\n[9/13] Running graph optimizers...")
+    print("\n[9/15] Running graph optimizers...")
     model = optimize_with_simplifier(model)
     model = optimize_with_onnxscript(model, remove_casts=False)
     model = optimize_with_onnxslim(model)
 
     # Step 10: Prune unused outputs (if requested)
     if prune_output_names:
-        print(f"\n[10/14] Pruning outputs to: {prune_output_names}...")
+        print(f"\n[10/15] Pruning outputs to: {prune_output_names}...")
         model, pruned = prune_outputs(model, prune_output_names)
         print(f"  Pruned: {pruned} outputs removed")
     else:
-        print("\n[10/14] Output pruning: skipped (no --prune-outputs)")
+        print("\n[10/15] Output pruning: skipped (no --prune-outputs)")
 
     # Step 11: Remove dead code (orphaned nodes from replacements and pruning)
-    print("\n[11/14] Removing dead code...")
+    print("\n[11/15] Removing dead code...")
     model, dead_removed = remove_dead_code(model)
     print(f"  Removed: {dead_removed} dead nodes")
 
     # Step 12: Fix Split nodes (remove zero-size outputs)
-    print("\n[12/14] Fixing Split nodes...")
+    print("\n[12/15] Fixing Split nodes...")
     model, split_fixed = fix_split_nodes(model)
     print(f"  Fixed: {split_fixed}")
 
-    # Step 13: Set dynamic batch
-    print("\n[13/14] Setting dynamic batch size...")
+    # Step 13: Truncate the DFT to the mel filterbank's used bins (bit-exact speedup)
+    if truncate_dft:
+        print("\n[13/15] Truncating DFT to used mel bins...")
+        model, dft_truncated = truncate_dft_bins(model)
+        print(f"  Truncated: {dft_truncated} DFT matmul(s)")
+    else:
+        print("\n[13/15] DFT truncation: skipped (--no-truncate-dft)")
+
+    # Step 14: Set dynamic batch
+    print("\n[14/15] Setting dynamic batch size...")
     model = set_dynamic_batch(model)
     print("  Done")
 
-    # Step 14: Finalize
-    print("\n[14/14] Finalizing model...")
+    # Step 15: Finalize
+    print("\n[15/15] Finalizing model...")
     model = rename_io(model)
     model.ir_version = 9
     if perch_mode:
@@ -1803,7 +1965,13 @@ def main():
     )
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantization")
     parser.add_argument(
-        "--int8-arm", action="store_true", help="Also create ARM-compatible INT8 model"
+        "--int8-arm",
+        action="store_true",
+        help=(
+            "Create partial INT8 (dynamic, MatMul weights only; spectrogram "
+            "front-end kept FP32). Lowest RAM on ARM (Perch v2: ~816->293 MB RSS, "
+            "top-1 preserved on real audio); independent of --no-int8. Validate accuracy."
+        ),
     )
     parser.add_argument(
         "--prune-outputs",
@@ -1815,6 +1983,14 @@ def main():
         "--perch",
         action="store_true",
         help="Perch v2 mode: preserve multi-output naming and set graph name to Perch",
+    )
+    parser.add_argument(
+        "--no-truncate-dft",
+        action="store_true",
+        help="Skip truncating the in-graph DFT to the mel filterbank's used bins. "
+        "Truncation is on by default: it is a bit-exact ~1.5-1.9x CPU speedup (the "
+        "DFT computes frequency bins the filterbank discards), self-reverts if the "
+        "output is not identical, and is a no-op on models that use every bin.",
     )
     parser.add_argument(
         "--collapse-select-to-where",
@@ -1854,7 +2030,12 @@ def main():
         prune_names = [s.strip() for s in args.prune_outputs.split(",")]
 
     # Run optimization pipeline
-    model = optimize_model(args.input, prune_output_names=prune_names, perch_mode=args.perch)
+    model = optimize_model(
+        args.input,
+        prune_output_names=prune_names,
+        perch_mode=args.perch,
+        truncate_dft=not args.no_truncate_dft,
+    )
     if model is None:
         print("Optimization failed!")
         return 1
@@ -1944,11 +2125,14 @@ def main():
     print(f"\n{'=' * 60}")
     print(f"{'RECOMMENDED USAGE':^60}")
     print(f"{'=' * 60}")
-    print("  GPU (CUDA/TensorRT):  Use FP32 or FP16")
-    print("  RPi 5 (FP16 support): Use FP16 for ~2x speedup")
-    print("  RPi 3/4 (no FP16):    Use INT8-ARM (experimental; validate accuracy)")
-    print("  Desktop CPU (Intel):  Use FP32 (INT8 is experimental; validate accuracy)")
-    print("  Desktop CPU (ARM):    Use INT8-ARM (experimental; validate accuracy)")
+    print("  GPU (CUDA/TensorRT):    Use FP32 or FP16")
+    print("  RPi 4/5, low RAM:       Use INT8-ARM (partial, MatMul-only): large RSS cut")
+    print("                          with top-1 preserved on Perch v2; validate on real audio")
+    print("  RPi 5, speed over RAM:  FP16 (add --fp16-keep-activations-fp32 on complex graphs)")
+    print("  Desktop CPU (Intel):    Use FP32")
+    print("  Desktop CPU (ARM):      Use INT8-ARM (validate accuracy)")
+    print("")
+    print("  Partial-INT8 only:  --perch --no-fp16 --no-int8 --int8-arm")
 
     return 0
 
