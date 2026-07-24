@@ -1749,16 +1749,22 @@ def truncate_dft_bins(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
         inp = src.get_inputs()[0]
         shape = [d if isinstance(d, int) and d > 0 else 1 for d in inp.shape]
         x = np.random.default_rng(0).standard_normal(shape).astype(np.float32)
-        base = src.run(None, {inp.name: x})[0]
+        base = src.run(None, {inp.name: x})
         dst = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"])
-        got = dst.run(None, {inp.name: x})[0]
-        max_abs = float(np.abs(base - got).max())
-        if max_abs > 1e-3:
-            print(
-                f"  Bit-exact check FAILED (max abs diff {max_abs:.3e}); reverting DFT truncation"
-            )
+        got = dst.run(None, {inp.name: x})
+        # Compare EVERY output: --perch mode is multi-output and the sensitive
+        # spectrogram output is not index 0, so a first-output-only check could
+        # miss corruption on a secondary output. allclose(equal_nan=True) also
+        # closes a NaN hole: a plain abs().max() is NaN when an output has NaNs,
+        # and `NaN > tol` is False, which would let corruption pass silently.
+        if len(base) != len(got) or any(
+            b.shape != g.shape or not np.allclose(b, g, rtol=0.0, atol=1e-3, equal_nan=True)
+            for b, g in zip(base, got)
+        ):
+            print("  Bit-exact check FAILED; reverting DFT truncation")
             return onnx.load_model_from_string(original_bytes), 0
-        print(f"  Bit-exact check passed (max abs diff {max_abs:.2e})")
+        worst = max(float(np.nan_to_num(np.abs(b - g)).max()) for b, g in zip(base, got))
+        print(f"  Bit-exact check passed (max abs diff {worst:.2e})")
     except Exception as exc:
         print(f"  DFT truncation verification failed ({exc}); reverting to be safe")
         return onnx.load_model_from_string(original_bytes), 0
@@ -1793,47 +1799,47 @@ def optimize_model(
     print(f"  Transpose: {initial_ops.get('Transpose', 0)}")
 
     # Step 1: Replace DFT with MatMul
-    print("\n[1/13] Replacing DFT with MatMul...")
+    print("\n[1/15] Replacing DFT with MatMul...")
     model, dft_replaced = replace_dft_with_matmul(model)
     print(f"  Replaced: {dft_replaced}")
 
     # Step 2: Replace RFFT2D with MatMul
-    print("\n[2/13] Replacing RFFT2D with MatMul...")
+    print("\n[2/15] Replacing RFFT2D with MatMul...")
     model, rfft_replaced = replace_rfft2d_with_matmul(model)
     print(f"  Replaced: {rfft_replaced}")
 
     # Step 3: Replace ReverseSequence with Slice
-    print("\n[3/13] Replacing ReverseSequence with Slice...")
+    print("\n[3/15] Replacing ReverseSequence with Slice...")
     model, rev_replaced = replace_reverse_sequence(model)
     print(f"  Replaced: {rev_replaced}")
 
     # Step 4: Replace GlobalAveragePool + Squeeze with ReduceMean
-    print("\n[4/13] Replacing GlobalAveragePool+Squeeze with ReduceMean...")
+    print("\n[4/15] Replacing GlobalAveragePool+Squeeze with ReduceMean...")
     model, gap_replaced = replace_globalavgpool_squeeze_with_reducemean(model)
     print(f"  Replaced: {gap_replaced}")
 
     # Step 5: Remove identity casts
-    print("\n[5/13] Removing identity Cast operations...")
+    print("\n[5/15] Removing identity Cast operations...")
     model, cast_removed = remove_identity_casts(model)
     print(f"  Removed: {cast_removed}")
 
     # Step 6: Fuse transpose patterns
-    print("\n[6/13] Fusing Transpose patterns...")
+    print("\n[6/15] Fusing Transpose patterns...")
     model, transpose_fused = fuse_transpose_patterns(model)
     print(f"  Fused: {transpose_fused}")
 
     # Step 7: Remove redundant reshapes
-    print("\n[7/13] Removing redundant Reshapes...")
+    print("\n[7/15] Removing redundant Reshapes...")
     model, reshape_removed = remove_redundant_reshapes(model)
     print(f"  Removed: {reshape_removed}")
 
     # Step 8: Convert INT32 to INT64 for compatibility
-    print("\n[8/13] Converting INT32 initializers to INT64...")
+    print("\n[8/15] Converting INT32 initializers to INT64...")
     model, int32_converted = convert_int32_to_int64(model)
     print(f"  Converted: {int32_converted}")
 
     # Step 9: Run external optimizers
-    print("\n[9/13] Running graph optimizers...")
+    print("\n[9/15] Running graph optimizers...")
     model = optimize_with_simplifier(model)
     model = optimize_with_onnxscript(model, remove_casts=False)
     model = optimize_with_onnxslim(model)

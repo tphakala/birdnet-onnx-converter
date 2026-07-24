@@ -668,6 +668,10 @@ def test_truncate_dft_bins_drops_unused_bins_bit_exact():
     got = ort.InferenceSession(
         truncated.SerializeToString(), providers=["CPUExecutionProvider"]
     ).run(None, {"X": x})[0]
+    # Not bit-identical: truncating the matmul changes its shape, so ORT may pick a
+    # different kernel / reduction order, differing by float-reassociation noise
+    # (~1e-6 on x86, exactly 0 on ARM in practice). A tolerance, not exact equality,
+    # is the correct assertion; real corruption (a dropped used bin) is orders larger.
     assert np.abs(base - got).max() < 1e-4
 
 
@@ -687,3 +691,37 @@ def test_truncate_dft_bins_noop_without_dft():
 
     _, count = truncate_dft_bins(_make_preproc_conv_model())
     assert count == 0
+
+
+def test_truncate_dft_bins_reverts_when_a_secondary_output_changes():
+    """The bit-exact gate compares EVERY output, not just index 0. If a model also
+    exposes the raw DFT bins as a separate output, truncation would change that
+    output, so the pass must revert (protects multi-output models like --perch)."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import truncate_dft_bins
+
+    fft, bins, frames = 8, 5, 4
+    wdft = np.linspace(-1.0, 1.0, fft * bins, dtype=np.float32).reshape(fft, bins)
+    wmel = np.asarray(
+        [[1.0, 0.0], [0.5, 0.5], [0.0, 1.0], [0.0, 0.0], [0.0, 0.0]], dtype=np.float32
+    )
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, frames, fft])
+    mel = h.make_tensor_value_info("mel", TensorProto.FLOAT, [1, frames, 2])
+    spec = h.make_tensor_value_info("spec", TensorProto.FLOAT, [1, frames, bins])  # raw bins
+    nodes = [
+        h.make_node("MatMul", ["X", "wdft"], ["spec"], name="dft_matmul"),
+        h.make_node("Relu", ["spec"], ["mag"], name="magnitude"),
+        h.make_node("MatMul", ["mag", "wmel"], ["mel"], name="mel_matmul"),
+    ]
+    inits = [numpy_helper.from_array(wdft, name="wdft"), numpy_helper.from_array(wmel, name="wmel")]
+    graph = h.make_graph(nodes, "dft_mel_multi", [x], [mel, spec], inits)
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    before = model.SerializeToString()
+    reverted, count = truncate_dft_bins(model)
+    assert count == 0, "truncation must revert when a secondary output would change"
+    assert reverted.SerializeToString() == before, "graph must be byte-identical after revert"

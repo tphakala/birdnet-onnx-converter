@@ -98,8 +98,9 @@ python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-keep-activ
 # Perch v2: preserve multi-output naming, include ARM-optimized INT8
 python optimize.py --input perch_v2.onnx --output perch_v2 --perch --int8-arm
 
-# Perch v2: produce ONLY the partial INT8 (MatMul-only) model for low-RAM ARM
-# (~64% less RSS, top-1 preserved; --int8-arm runs independently of --no-int8)
+# Perch v2: add the partial INT8 (MatMul-only) model for low-RAM ARM, skipping
+# the FP16 and full-INT8 variants (the FP32 model is always written; --int8-arm
+# runs independently of --no-int8). ~64% less RSS, top-1 preserved.
 python optimize.py --input perch_v2.onnx --output perch_v2 --perch \
     --no-fp16 --no-int8 --int8-arm
 
@@ -194,6 +195,8 @@ No native FP16. Use the partial INT8 (`--int8-arm`) model for low RAM, otherwise
 FP32:
 
 ```python
+import onnxruntime as ort
+
 session = ort.InferenceSession("BirdNET_int8_arm.onnx")
 ```
 
