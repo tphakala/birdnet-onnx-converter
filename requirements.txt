@@ -1,6 +1,6 @@
 # Core dependencies
 onnx>=1.19.1
-numpy>=1.21.0
+numpy>=2.2.6
 onnxruntime>=1.20.1
 
 # Optimization tools
