@@ -777,7 +777,9 @@ def test_create_dft_matrix_matches_exact_rfft():
         np.testing.assert_allclose(matrix, expected, rtol=0, atol=1e-7)
 
 
-def _make_framed_dft_mel_model(skew_frame=False, abs_between=False, tap=None, expose=None):
+def _make_framed_dft_mel_model(
+    skew_frame=False, abs_between=False, tap=None, expose=None, leftover_dft=False, seed=1
+):
     """A BirdNET-shaped framed spectrogram front end on a [2, 64] waveform.
 
     X -> Reshape [-1, 32, 2] -> Gather(idx[9, 8], axis=1) -> Reshape [-1, 9, 16]
@@ -789,7 +791,8 @@ def _make_framed_dft_mel_model(skew_frame=False, abs_between=False, tap=None, ex
     between the DFT and mel MatMuls (a nonlinear magnitude, as in complex-STFT
     front ends). tap names a framing tensor that gets a second consumer (an
     Identity feeding an extra graph output); expose names one that becomes a graph
-    output itself.
+    output itself. leftover_dft adds an unrelated DFT MatMul on the waveform that
+    cannot be folded; seed varies the mel weights.
     """
     import numpy as np
     import onnx.helper as h
@@ -797,7 +800,7 @@ def _make_framed_dft_mel_model(skew_frame=False, abs_between=False, tap=None, ex
 
     from optimize import create_dft_matrix
 
-    rng = np.random.default_rng(1)
+    rng = np.random.default_rng(seed)
     fft, bins, mels, frames, group, hop = 16, 9, 4, 9, 2, 6
     idx = np.arange(frames)[:, None] * (hop // group) + np.arange(fft // group)[None, :]
     if skew_frame:
@@ -837,6 +840,11 @@ def _make_framed_dft_mel_model(skew_frame=False, abs_between=False, tap=None, ex
         h.make_node("Reshape", ["mel_flat", "shape_mel"], ["mel_out"], name="reshape_mel"),
         h.make_node("Mul", ["mel_out", "mel_out"], ["out"], name="square"),
     ]
+    if leftover_dft:
+        inits.append(numpy_helper.from_array(create_dft_matrix(64), name="dft_leftover"))
+        nodes.append(
+            h.make_node("MatMul", ["X", "dft_leftover"], ["leftover"], name="dft_leftover")
+        )
     shapes = {
         "grp": [2, 32, 2],
         "gathered": [2, frames, fft // group, group],
@@ -849,6 +857,8 @@ def _make_framed_dft_mel_model(skew_frame=False, abs_between=False, tap=None, ex
         outputs.append(h.make_tensor_value_info("tap_out", TensorProto.FLOAT, shapes[tap]))
     if expose is not None:
         outputs.append(h.make_tensor_value_info(expose, TensorProto.FLOAT, shapes[expose]))
+    if leftover_dft:
+        outputs.append(h.make_tensor_value_info("leftover", TensorProto.FLOAT, [2, 33]))
     graph = h.make_graph(nodes, "framed_dft_mel", [x], outputs, inits)
     model = h.make_model(graph, opset_imports=[h.make_opsetid("", 17)])
     model.ir_version = 9
@@ -1107,3 +1117,92 @@ def test_fold_frontend_self_check_reverts_on_ort_error(monkeypatch):
     result, count = fold_frontend_to_conv(model)
     assert count == 0
     assert result.SerializeToString() == before
+
+
+def test_optimize_model_fails_when_fold_leaves_a_dft_matmul(tmp_path: Path):
+    """One band folds but another DFT MatMul stays: the fold alone reports 1, and
+    optimize_model refuses the half-folded graph instead of returning it."""
+    from optimize import fold_frontend_to_conv, optimize_model
+
+    _, count = fold_frontend_to_conv(_make_framed_dft_mel_model(leftover_dft=True))
+    assert count == 1
+
+    src = tmp_path / "half.onnx"
+    onnx.save(_make_framed_dft_mel_model(leftover_dft=True), str(src))
+    assert optimize_model(str(src), fold_frontend=True) is None
+
+
+def _rename_graph(model, prefix):
+    """Prefix every node, tensor and initializer name except the shared input X."""
+    keep = {"X"}
+    new = lambda n: n if n in keep or not n else prefix + n  # noqa: E731
+    for node in model.graph.node:
+        node.name = new(node.name)
+        node.input[:] = [new(i) for i in node.input]
+        node.output[:] = [new(o) for o in node.output]
+    for init in model.graph.initializer:
+        init.name = new(init.name)
+    for out in model.graph.output:
+        out.name = new(out.name)
+    return model
+
+
+def test_fold_frontend_to_conv_folds_two_bands_sharing_one_waveform():
+    """Two bands read the same waveform: each becomes its own Conv with its own
+    weight, one Unsqueeze feeds both, and both outputs keep their values."""
+    import numpy as np
+    import onnxruntime as ort
+
+    from optimize import fold_frontend_to_conv
+
+    a = _rename_graph(_make_framed_dft_mel_model(seed=1), "a_")
+    b = _rename_graph(_make_framed_dft_mel_model(seed=2), "b_")
+    a.graph.node.extend(b.graph.node)
+    a.graph.initializer.extend(b.graph.initializer)
+    a.graph.output.extend(b.graph.output)
+    original = a.SerializeToString()
+
+    folded, count = fold_frontend_to_conv(a)
+    assert count == 2
+    ops = [n.op_type for n in folded.graph.node]
+    assert ops.count("Unsqueeze") == 1 and ops.count("Conv") == 2
+    assert "Gather" not in ops and "MatMul" not in ops
+
+    x = np.random.default_rng(0).standard_normal((2, 64)).astype(np.float32)
+    run = lambda m: ort.InferenceSession(m, providers=["CPUExecutionProvider"]).run(None, {"X": x})  # noqa: E731
+    base, got = run(original), run(folded.SerializeToString())
+    assert len(base) == len(got) == 2
+    for want, have in zip(base, got):
+        assert np.abs(want - have).max() < 1e-4
+    assert np.abs(got[0] - got[1]).max() > 1e-3, "bands must carry different weights"
+
+
+def test_find_preprocessing_node_names_falls_back_to_first_conv_without_2d_conv():
+    """With only 1-D Convs the anchor is the first Conv, as before the 2-D rule:
+    nodes after it are not front end."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import find_preprocessing_node_names
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, 16])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [1, 2, 4])
+    inits = [
+        numpy_helper.from_array(np.array([2.0], dtype=np.float32), name="scale"),
+        numpy_helper.from_array(np.array([1], dtype=np.int64), name="axes"),
+        numpy_helper.from_array(np.ones((2, 1, 4), dtype=np.float32), name="w1"),
+        numpy_helper.from_array(np.ones((2, 2, 1), dtype=np.float32), name="w2"),
+    ]
+    nodes = [
+        h.make_node("Mul", ["X", "scale"], ["xs"], name="pre_mul"),
+        h.make_node("Unsqueeze", ["xs", "axes"], ["x3"], name="pre_unsqueeze"),
+        h.make_node("Conv", ["x3", "w1"], ["c1"], name="conv1", strides=[3]),
+        h.make_node("Relu", ["c1"], ["r"], name="between_relu"),
+        h.make_node("Conv", ["r", "w2"], ["out"], name="conv2"),
+    ]
+    graph = h.make_graph(nodes, "only_1d", [x], [out], inits)
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    assert find_preprocessing_node_names(model) == {"pre_mul", "pre_unsqueeze"}
