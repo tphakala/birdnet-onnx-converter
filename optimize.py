@@ -1939,7 +1939,7 @@ def fold_frontend_to_conv(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]
         if mel is None or mel.op_type != "MatMul" or mel.input[0] != cur:
             return None
         mel_w = float_const(mel.input[1], 2)
-        if mel_w is None or mel_w.shape[0] != bins or mel_w.shape[1] >= bins:
+        if mel_w is None or mel_w.shape[0] != bins or mel_w.shape[1] < 1:
             return None
         mels = mel_w.shape[1]
         last = mel

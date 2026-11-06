@@ -778,7 +778,13 @@ def test_create_dft_matrix_matches_exact_rfft():
 
 
 def _make_framed_dft_mel_model(
-    skew_frame=False, abs_between=False, tap=None, expose=None, leftover_dft=False, seed=1
+    skew_frame=False,
+    abs_between=False,
+    tap=None,
+    expose=None,
+    leftover_dft=False,
+    seed=1,
+    mels=4,
 ):
     """A BirdNET-shaped framed spectrogram front end on a [2, 64] waveform.
 
@@ -792,7 +798,7 @@ def _make_framed_dft_mel_model(
     front ends). tap names a framing tensor that gets a second consumer (an
     Identity feeding an extra graph output); expose names one that becomes a graph
     output itself. leftover_dft adds an unrelated DFT MatMul on the waveform that
-    cannot be folded; seed varies the mel weights.
+    cannot be folded; seed varies the mel weights; mels sets the filterbank width.
     """
     import numpy as np
     import onnx.helper as h
@@ -801,7 +807,7 @@ def _make_framed_dft_mel_model(
     from optimize import create_dft_matrix
 
     rng = np.random.default_rng(seed)
-    fft, bins, mels, frames, group, hop = 16, 9, 4, 9, 2, 6
+    fft, bins, frames, group, hop = 16, 9, 9, 2, 6
     idx = np.arange(frames)[:, None] * (hop // group) + np.arange(fft // group)[None, :]
     if skew_frame:
         idx[4, 3] += 1
@@ -892,6 +898,30 @@ def test_fold_frontend_to_conv_matches_framed_dft_mel():
         None, {"X": x}
     )[0]
     assert base.shape == got.shape == (2, 9, 4)
+    assert np.abs(base - got).max() < 1e-4
+
+
+@pytest.mark.parametrize("mels", [9, 12], ids=["mels_equal_bins", "mels_above_bins"])
+def test_fold_frontend_to_conv_folds_filterbank_as_wide_as_the_dft(mels):
+    """The fold is linear for any filterbank width, so a mel matrix with as many or
+    more bands than DFT bins folds too, with the same output."""
+    import numpy as np
+    import onnxruntime as ort
+
+    from optimize import fold_frontend_to_conv
+
+    model = _make_framed_dft_mel_model(mels=mels)
+    original = model.SerializeToString()
+    folded, count = fold_frontend_to_conv(model)
+    assert count == 1
+    assert "MatMul" not in [n.op_type for n in folded.graph.node]
+
+    x = np.random.default_rng(0).standard_normal((2, 64)).astype(np.float32)
+    base = ort.InferenceSession(original, providers=["CPUExecutionProvider"]).run(None, {"X": x})[0]
+    got = ort.InferenceSession(folded.SerializeToString(), providers=["CPUExecutionProvider"]).run(
+        None, {"X": x}
+    )[0]
+    assert base.shape == got.shape == (2, 9, mels)
     assert np.abs(base - got).max() < 1e-4
 
 
