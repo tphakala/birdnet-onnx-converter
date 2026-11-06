@@ -2046,10 +2046,21 @@ def fold_frontend_to_conv(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]
         base, got = run(original_bytes), run(model.SerializeToString())
         worst = 0.0
         for name in tensors:
-            scale = max(float(np.abs(base[name]).max()), 1e-30)
-            err = float(np.nan_to_num(np.abs(base[name] - got[name]), nan=np.inf).max()) / scale
+            if base[name].shape != got[name].shape:
+                err = np.inf
+            else:
+                # Non-finite baseline entries must be reproduced exactly; the
+                # relative error is taken over the finite entries only.
+                nonfinite = ~np.isfinite(base[name])
+                if np.array_equal(base[name][nonfinite], got[name][nonfinite], equal_nan=True):
+                    ref, out = base[name][~nonfinite], got[name][~nonfinite]
+                    scale = max(float(np.abs(ref).max(initial=0.0)), 1e-30)
+                    diff = np.nan_to_num(np.abs(ref - out), nan=np.inf)
+                    err = float(diff.max(initial=0.0)) / scale
+                else:
+                    err = np.inf
             worst = max(worst, err)
-            if base[name].shape != got[name].shape or err > 1e-4:
+            if err > 1e-4:
                 print(f"  Fold self-check FAILED on {name} (relative error {err:.2e}); reverting")
                 return onnx.load_model_from_string(original_bytes), 0
         for name in outputs:

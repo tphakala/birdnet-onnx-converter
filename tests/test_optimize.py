@@ -966,3 +966,114 @@ def test_fold_frontend_fp16_keeps_fold_conv_fp32(optimized_fold_fp32_path: Path)
     spec = session.get_inputs()[0]
     shape = [d if isinstance(d, int) and d > 0 else 1 for d in spec.shape]
     session.run(None, {spec.name: np.zeros(shape, dtype=np.float32)})
+
+
+class _FakeSession:
+    """Stand-in for onnxruntime.InferenceSession for the fold self-check.
+
+    The first session built is the original graph, the second the folded one.
+    `outputs[k]` maps "mel" (the intermediate mel tensor) and "out" (the real
+    graph output) to the arrays session k returns.
+    """
+
+    outputs: tuple = ()
+    built = 0
+
+    def __init__(self, model_bytes, providers=None):
+        self.index = _FakeSession.built
+        _FakeSession.built += 1
+        self.out_names = [o.name for o in onnx.load_model_from_string(model_bytes).graph.output]
+
+    def get_inputs(self):
+        from types import SimpleNamespace
+
+        return [SimpleNamespace(name="X", shape=[2, 64])]
+
+    def get_outputs(self):
+        from types import SimpleNamespace
+
+        return [SimpleNamespace(name=n) for n in self.out_names]
+
+    def run(self, _names, _feed):
+        mine = _FakeSession.outputs[self.index]
+        return [mine["out" if n == "out" else "mel"] for n in self.out_names]
+
+
+def _grid(value=1.0, **cells):
+    import numpy as np
+
+    a = np.full((2, 9, 4), value, dtype=np.float32)
+    for key, v in cells.items():
+        a[0, 0, int(key[1:])] = v
+    return a
+
+
+_INF, _NAN = float("inf"), float("nan")
+
+
+@pytest.mark.parametrize(
+    ("base_mel", "got_mel", "base_out", "got_out", "expect_folded"),
+    [
+        (_grid(), _grid(), _grid(), _grid(), True),
+        (_grid(), _grid(2.0), _grid(), _grid(), False),
+        (_grid(_NAN), _grid(), _grid(), _grid(), False),
+        (_grid(_INF), _grid(_INF), _grid(), _grid(), True),
+        (_grid(_INF), _grid(), _grid(), _grid(), False),
+        (_grid(c0=_INF), _grid(c0=_INF), _grid(), _grid(), True),
+        (_grid(c0=_INF), _grid(c0=_INF, c1=1.1), _grid(), _grid(), False),
+        (_grid(c0=_INF), _grid(c0=-_INF), _grid(), _grid(), False),
+        (_grid(), _grid()[:, :8], _grid(), _grid(), False),
+        (_grid(), _grid(), _grid(), _grid(3.0), False),
+    ],
+    ids=[
+        "match",
+        "mel_mismatch",
+        "nan_baseline",
+        "equal_inf",
+        "inf_vs_finite",
+        "partly_inf_match",
+        "partly_inf_finite_mismatch",
+        "inf_sign_differs",
+        "mel_shape_mismatch",
+        "output_mismatch",
+    ],
+)
+def test_fold_frontend_self_check_reverts(
+    monkeypatch, base_mel, got_mel, base_out, got_out, expect_folded
+):
+    """The self-check keeps the fold only when the folded mel tensor equals the
+    original (non-finite entries included) and the graph output agrees; on any
+    mismatch it reverts to the original graph bytes and reports 0."""
+    import onnxruntime
+
+    from optimize import fold_frontend_to_conv
+
+    model = _make_framed_dft_mel_model()
+    before = model.SerializeToString()
+    _FakeSession.built = 0
+    _FakeSession.outputs = (
+        {"mel": base_mel, "out": base_out},
+        {"mel": got_mel, "out": got_out},
+    )
+    monkeypatch.setattr(onnxruntime, "InferenceSession", _FakeSession)
+
+    result, count = fold_frontend_to_conv(model)
+    assert count == (1 if expect_folded else 0)
+    assert (result.SerializeToString() != before) is expect_folded
+
+
+def test_fold_frontend_self_check_reverts_on_ort_error(monkeypatch):
+    """An ONNX Runtime failure during the self-check reverts the fold."""
+    import onnxruntime
+
+    from optimize import fold_frontend_to_conv
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("ORT failed")
+
+    model = _make_framed_dft_mel_model()
+    before = model.SerializeToString()
+    monkeypatch.setattr(onnxruntime, "InferenceSession", broken)
+    result, count = fold_frontend_to_conv(model)
+    assert count == 0
+    assert result.SerializeToString() == before
