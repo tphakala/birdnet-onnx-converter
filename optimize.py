@@ -69,10 +69,10 @@ INT8_EXPERIMENTAL_WARNING = (
 def create_dft_matrix(fft_size: int) -> np.ndarray:
     """Create a real DFT matrix (cosine basis) for one-sided FFT."""
     num_freqs = fft_size // 2 + 1
-    n = np.arange(fft_size, dtype=np.float32)[:, np.newaxis]
-    k = np.arange(num_freqs, dtype=np.float32)[np.newaxis, :]
+    n = np.arange(fft_size, dtype=np.float64)[:, np.newaxis]
+    k = np.arange(num_freqs, dtype=np.float64)[np.newaxis, :]
     dft_matrix = np.cos(2 * np.pi * k * n / fft_size)
-    return dft_matrix
+    return dft_matrix.astype(np.float32)
 
 
 def get_tensor_shape(model: onnx.ModelProto, tensor_name: str) -> Optional[list[int]]:
