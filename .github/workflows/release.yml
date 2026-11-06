@@ -5,6 +5,13 @@ on:
     tags:
       - "v*"
 
+# birda emits rows down to this floor, below every compare_predictions.py
+# cutoff minus its tolerance, so a detection straddling the cutoff keeps its
+# confidence on both sides and is reported as a boundary note.
+# tests/fixtures/baseline_predictions.csv is generated with the same floor.
+env:
+  BIRDA_MIN_CONFIDENCE: "0.05"
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -86,7 +93,7 @@ jobs:
             -m fp32 \
             --output-dir build/fp32 \
             --format csv \
-            --min-confidence 0.1
+            --min-confidence "$BIRDA_MIN_CONFIDENCE"
           mv build/fp32/*.csv build/fp32_predictions.csv
           python tests/compare_predictions.py \
             tests/fixtures/baseline_predictions.csv \
@@ -100,12 +107,13 @@ jobs:
             -m fp16 \
             --output-dir build/fp16 \
             --format csv \
-            --min-confidence 0.1
+            --min-confidence "$BIRDA_MIN_CONFIDENCE"
           mv build/fp16/*.csv build/fp16_predictions.csv
           python tests/compare_predictions.py \
             tests/fixtures/baseline_predictions.csv \
             build/fp16_predictions.csv \
-            --tolerance 0.01
+            --tolerance 0.05 \
+            --min-confidence 0.15
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

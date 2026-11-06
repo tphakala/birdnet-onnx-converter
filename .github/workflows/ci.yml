@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# birda emits rows down to this floor, below every compare_predictions.py
+# cutoff minus its tolerance, so a detection straddling the cutoff keeps its
+# confidence on both sides and is reported as a boundary note.
+# tests/fixtures/baseline_predictions.csv is generated with the same floor.
+env:
+  BIRDA_MIN_CONFIDENCE: "0.05"
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -127,7 +134,7 @@ jobs:
             -m fp32 \
             --output-dir tests/output/fp32 \
             --format csv \
-            --min-confidence 0.1
+            --min-confidence "$BIRDA_MIN_CONFIDENCE"
           mv tests/output/fp32/*.csv tests/output/fp32_predictions.csv
 
       - name: Compare FP32 predictions against baseline
@@ -145,7 +152,7 @@ jobs:
             -m fp16 \
             --output-dir tests/output/fp16 \
             --format csv \
-            --min-confidence 0.1
+            --min-confidence "$BIRDA_MIN_CONFIDENCE"
           mv tests/output/fp16/*.csv tests/output/fp16_predictions.csv
 
       - name: Compare FP16 predictions against baseline
