@@ -95,6 +95,11 @@ python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-full
 # CPU EP can fuse QuickGelu (much faster FP16 on ARM/CPU; weights stay FP16)
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-keep-activations-fp32
 
+# Fold each spectrogram's window, DFT and mel filterbank into one strided Conv
+# (about 25% faster on CPU than the default DFT truncation, which it supersedes).
+# Not bit-exact: validate on real audio. Fails if the model has no foldable front end.
+python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp32-only --fold-frontend
+
 # Perch v2: preserve multi-output naming, include ARM-optimized INT8
 python optimize.py --input perch_v2.onnx --output perch_v2 --perch --int8-arm
 
@@ -126,7 +131,7 @@ python optimize.py --input mdata_raw.onnx --output mdata_where.onnx \
 | `*_int8_arm.onnx` | Partial INT8 (MatMul-only, front-end FP32), `--int8-arm` | RPi 4/5 / ARM, low RAM (recommended) |
 
 For both FP16 and INT8, the spectrogram preprocessing front-end (STFT/mel
-MatMuls and normalization) is kept in full precision to preserve accuracy;
+MatMuls, or the folded front-end Conv, and normalization) is kept in full precision to preserve accuracy;
 only the CNN backbone is reduced.
 
 > **Validate INT8 accuracy before production.** The all-ops INT8 model
@@ -150,6 +155,8 @@ The optimizer applies the following transformations:
 7. **Graph optimization** - Uses onnxscript optimizer and onnxslim for further optimization
 8. **Split node fixing** - Removes zero-size outputs from Split nodes
 9. **Dead code elimination** - Removes orphaned nodes not contributing to output
+10. **DFT truncation** - Drops DFT bins the mel filterbank discards (bit-exact, on by default; `--no-truncate-dft` skips it)
+11. **Front-end fold** - Opt-in `--fold-frontend` folds each spectrogram's Hann window, DFT and mel filterbank into one strided 1-D Conv on the waveform. It is not bit-exact, so validate it on real audio
 
 ### Precision conversion safeguards
 
@@ -159,10 +166,11 @@ accuracy-critical spectrogram front-end:
 - **FP16 dual-role output decoupling** - Inserts an Identity boundary so the
   `keep_io_types` Cast cannot leave mixed fp16/fp32 ops on multi-output models
   (e.g. the v2.4 embeddings model); external output names are preserved.
-- **FP16 preprocessing protection** - Keeps the STFT/mel MatMuls and
-  normalization in FP32 (the CNN backbone goes FP16); `--fp16-full` opts out.
-- **INT8 preprocessing exclusion** - Excludes the spectrogram MatMuls from INT8
-  quantization and refreshes `value_info` before quantizing so tensor types are
+- **FP16 preprocessing protection** - Keeps the STFT/mel MatMuls (or the folded
+  front-end Conv) and normalization in FP32 (the CNN backbone goes FP16);
+  `--fp16-full` opts out.
+- **INT8 preprocessing exclusion** - Excludes the spectrogram MatMuls (or the folded
+  front-end Conv) from INT8 quantization and refreshes `value_info` before quantizing so tensor types are
   classified correctly.
 
 ## Supported Models

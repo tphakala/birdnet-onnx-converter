@@ -53,6 +53,24 @@ def test_audio_path(fixtures_dir: Path) -> Path:
     return path
 
 
+def _read_wav_mono(path: Path, rate: int = 48000):
+    """Decode a 16-bit PCM WAV at `rate` Hz to mono float32 in [-1, 1) (no resampling)."""
+    import wave
+
+    import numpy as np
+
+    with wave.open(str(path), "rb") as w:
+        channels = w.getnchannels()
+        assert w.getsampwidth() == 2, "test audio must be 16-bit PCM"
+        assert w.getframerate() == rate, f"test audio must be {rate} Hz (no resampling)"
+        # WAV/RIFF is little-endian; '<i2' decodes correctly on any host.
+        raw = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2")
+    audio = raw.astype(np.float32) / 32768.0
+    if channels > 1:
+        audio = audio.reshape(-1, channels).mean(axis=1)
+    return audio
+
+
 @pytest.fixture(scope="session")
 def audio_input(fixtures_dir: Path):
     """Return a deterministic (1, 144000) float32 BirdNET input.
@@ -64,27 +82,30 @@ def audio_input(fixtures_dir: Path):
     144000 samples = 3 s). The array is session-scoped and shared; consumers must
     not mutate it in place.
     """
-    import wave
-
     import numpy as np
 
-    rate = 48000
-    samples = rate * 3  # BirdNET v2.4: 3 s at 48 kHz
+    samples = 48000 * 3  # BirdNET v2.4: 3 s at 48 kHz
     path = fixtures_dir / "test_audio.wav"
     if path.exists():
-        with wave.open(str(path), "rb") as w:
-            channels = w.getnchannels()
-            assert w.getsampwidth() == 2, "test audio must be 16-bit PCM"
-            assert w.getframerate() == rate, f"test audio must be {rate} Hz (no resampling)"
-            # WAV/RIFF is little-endian; '<i2' decodes correctly on any host.
-            raw = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2")
-        audio = raw.astype(np.float32) / 32768.0
-        if channels > 1:
-            audio = audio.reshape(-1, channels).mean(axis=1)
+        audio = _read_wav_mono(path)
     else:
         audio = np.random.default_rng(42).standard_normal(samples).astype(np.float32) * 0.1
     audio = np.pad(audio, (0, max(0, samples - len(audio))))[:samples]
     return audio.reshape(1, samples).astype(np.float32)
+
+
+@pytest.fixture(scope="session")
+def audio_windows(test_audio_path: Path):
+    """Return the whole test recording as [N, 144000] float32 windows (1.5 s hop).
+
+    Session-scoped and shared; consumers must not mutate it in place.
+    """
+    import numpy as np
+
+    audio = _read_wav_mono(test_audio_path)
+    samples, hop = 48000 * 3, 48000 * 3 // 2
+    starts = range(0, len(audio) - samples + 1, hop)
+    return np.stack([audio[s : s + samples] for s in starts]).astype(np.float32)
 
 
 @pytest.fixture(scope="session")
@@ -137,4 +158,19 @@ def optimized_fp16_path(optimized_fp32_path: Path, output_dir: Path) -> Path:
             onnx.save(fp16_model, str(output_path))
     if not output_path.exists():
         pytest.skip("FP16 conversion failed")
+    return output_path
+
+
+@pytest.fixture(scope="session")
+def optimized_fold_fp32_path(converted_onnx_path: Path, output_dir: Path) -> Path:
+    """Optimize ONNX model with the front end folded into Conv and return FP32 path."""
+    import onnx
+
+    from optimize import optimize_model
+
+    output_path = output_dir / "BirdNET_fold_fp32.onnx"
+    if not output_path.exists():
+        optimized = optimize_model(str(converted_onnx_path), fold_frontend=True)
+        assert optimized is not None, "Model optimization with fold_frontend failed"
+        onnx.save(optimized, str(output_path))
     return output_path

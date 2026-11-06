@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import onnx
+import pytest
 
 
 def test_optimization_reduces_ops(converted_onnx_path: Path):
@@ -299,8 +300,8 @@ def test_find_preprocessing_node_names_empty_without_conv():
     assert find_preprocessing_node_names(_make_dual_role_model()) == set()
 
 
-def test_find_preprocessing_node_names_uses_first_conv():
-    """With multiple Convs, only ancestors of the FIRST Conv are the front-end;
+def test_find_preprocessing_node_names_uses_first_2d_conv():
+    """With multiple 2-D Convs, only ancestors of the FIRST one are the front-end;
     nodes between the first and a later Conv are downstream and excluded."""
     import onnx.helper as h
     from onnx import TensorProto
@@ -324,6 +325,40 @@ def test_find_preprocessing_node_names_uses_first_conv():
     names = find_preprocessing_node_names(model)
     assert names == {"pre_mul"}
     assert {"conv1", "between_relu", "conv2"}.isdisjoint(names)
+
+
+def test_find_preprocessing_node_names_protects_1d_frontend_conv():
+    """A 1-D Conv on the waveform (the folded spectrogram) is front-end: the anchor
+    is the first Conv with a rank-4 weight, so the 1-D Conv and its neighbours are
+    ancestors of the stem and protected, while the stem itself is not."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import find_preprocessing_node_names
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, 16])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [1, 2, 2, 2])
+    inits = [
+        numpy_helper.from_array(np.array([1], dtype=np.int64), name="axes"),
+        numpy_helper.from_array(np.ones((2, 1, 4), dtype=np.float32), name="w_fold"),
+        numpy_helper.from_array(np.array([1, 1, 2, 7], dtype=np.int64), name="shape_img"),
+        numpy_helper.from_array(np.ones((2, 1, 1, 1), dtype=np.float32), name="w_stem"),
+    ]
+    nodes = [
+        h.make_node("Unsqueeze", ["X", "axes"], ["x3"], name="fold_unsqueeze"),
+        h.make_node("Conv", ["x3", "w_fold"], ["c1"], name="fold_conv", strides=[2]),
+        h.make_node("Transpose", ["c1"], ["c1t"], name="fold_transpose", perm=[0, 2, 1]),
+        h.make_node("Reshape", ["c1t", "shape_img"], ["img"], name="fold_reshape"),
+        h.make_node("Conv", ["img", "w_stem"], ["out"], name="stem_conv"),
+    ]
+    graph = h.make_graph(nodes, "fold_frontend", [x], [out], inits)
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    names = find_preprocessing_node_names(model)
+    assert {"fold_unsqueeze", "fold_conv", "fold_transpose", "fold_reshape"} <= names
+    assert "stem_conv" not in names
 
 
 def test_find_preprocessing_node_names_names_unnamed_frontend_nodes():
@@ -740,3 +775,468 @@ def test_create_dft_matrix_matches_exact_rfft():
         expected = np.fft.rfft(np.eye(fft_size), axis=1).real
         assert matrix.dtype == np.float32
         np.testing.assert_allclose(matrix, expected, rtol=0, atol=1e-7)
+
+
+def _make_framed_dft_mel_model(
+    skew_frame=False,
+    abs_between=False,
+    tap=None,
+    expose=None,
+    leftover_dft=False,
+    seed=1,
+    mels=4,
+):
+    """A BirdNET-shaped framed spectrogram front end on a [2, 64] waveform.
+
+    X -> Reshape [-1, 32, 2] -> Gather(idx[9, 8], axis=1) -> Reshape [-1, 9, 16]
+      -> Mul(hann) -> MatMul(dft[16, 9]) -> Reshape [-1, 9] -> MatMul(mel[9, 4])
+      -> Reshape [-1, 9, 4] -> Mul(x, x)
+
+    That is F=16 samples per frame, hop=6, gather group g=2, 9 frames. skew_frame
+    shifts one frame index (non-contiguous framing); abs_between inserts an Abs
+    between the DFT and mel MatMuls (a nonlinear magnitude, as in complex-STFT
+    front ends). tap names a framing tensor that gets a second consumer (an
+    Identity feeding an extra graph output); expose names one that becomes a graph
+    output itself. leftover_dft adds an unrelated DFT MatMul on the waveform that
+    cannot be folded; seed varies the mel weights; mels sets the filterbank width.
+    """
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import create_dft_matrix
+
+    rng = np.random.default_rng(seed)
+    fft, bins, frames, group, hop = 16, 9, 9, 2, 6
+    idx = np.arange(frames)[:, None] * (hop // group) + np.arange(fft // group)[None, :]
+    if skew_frame:
+        idx[4, 3] += 1
+    hann = (0.5 - 0.5 * np.cos(2 * np.pi * np.arange(fft) / fft)).astype(np.float32)
+    mel = rng.random((bins, mels)).astype(np.float32)
+
+    def i64(name, values):
+        return numpy_helper.from_array(np.asarray(values, dtype=np.int64), name=name)
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [2, 64])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [2, frames, mels])
+    inits = [
+        i64("shape_grp", [-1, 64 // group, group]),
+        i64("idx", idx),
+        i64("shape_frames", [-1, frames, fft]),
+        numpy_helper.from_array(hann, name="hann"),
+        numpy_helper.from_array(create_dft_matrix(fft), name="dft"),
+        i64("shape_flat", [-1, bins]),
+        numpy_helper.from_array(mel, name="mel"),
+        i64("shape_mel", [-1, frames, mels]),
+    ]
+    mel_in = "spec_flat"
+    nodes = [
+        h.make_node("Reshape", ["X", "shape_grp"], ["grp"], name="reshape_grp"),
+        h.make_node("Gather", ["grp", "idx"], ["gathered"], name="gather_frames", axis=1),
+        h.make_node("Reshape", ["gathered", "shape_frames"], ["frames"], name="reshape_frames"),
+        h.make_node("Mul", ["frames", "hann"], ["windowed"], name="hann_mul"),
+        h.make_node("MatMul", ["windowed", "dft"], ["spec"], name="dft_matmul"),
+        h.make_node("Reshape", ["spec", "shape_flat"], ["spec_flat"], name="reshape_flat"),
+    ]
+    if abs_between:
+        nodes.append(h.make_node("Abs", ["spec_flat"], ["spec_abs"], name="magnitude"))
+        mel_in = "spec_abs"
+    nodes += [
+        h.make_node("MatMul", [mel_in, "mel"], ["mel_flat"], name="mel_matmul"),
+        h.make_node("Reshape", ["mel_flat", "shape_mel"], ["mel_out"], name="reshape_mel"),
+        h.make_node("Mul", ["mel_out", "mel_out"], ["out"], name="square"),
+    ]
+    if leftover_dft:
+        inits.append(numpy_helper.from_array(create_dft_matrix(64), name="dft_leftover"))
+        nodes.append(
+            h.make_node("MatMul", ["X", "dft_leftover"], ["leftover"], name="dft_leftover")
+        )
+    shapes = {
+        "grp": [2, 32, 2],
+        "gathered": [2, frames, fft // group, group],
+        "frames": [2, frames, fft],
+        "windowed": [2, frames, fft],
+    }
+    outputs = [out]
+    if tap is not None:
+        nodes.append(h.make_node("Identity", [tap], ["tap_out"], name="tap_identity"))
+        outputs.append(h.make_tensor_value_info("tap_out", TensorProto.FLOAT, shapes[tap]))
+    if expose is not None:
+        outputs.append(h.make_tensor_value_info(expose, TensorProto.FLOAT, shapes[expose]))
+    if leftover_dft:
+        outputs.append(h.make_tensor_value_info("leftover", TensorProto.FLOAT, [2, 33]))
+    graph = h.make_graph(nodes, "framed_dft_mel", [x], outputs, inits)
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 17)])
+    model.ir_version = 9
+    return model
+
+
+def test_fold_frontend_to_conv_matches_framed_dft_mel():
+    """The Hann/DFT/mel chain over framed samples becomes one strided 1-D Conv on
+    the waveform with the same output (batch 2 pins the Unsqueeze/Transpose axes)."""
+    import numpy as np
+    import onnxruntime as ort
+
+    from optimize import fold_frontend_to_conv
+
+    model = _make_framed_dft_mel_model()
+    original = model.SerializeToString()
+
+    folded, count = fold_frontend_to_conv(model)
+    assert count == 1
+    ops = [n.op_type for n in folded.graph.node]
+    assert "Gather" not in ops and "MatMul" not in ops
+    convs = [n for n in folded.graph.node if n.op_type == "Conv"]
+    assert len(convs) == 1
+    weight = next(i for i in folded.graph.initializer if i.name == convs[0].input[1])
+    assert list(weight.dims) == [4, 1, 16]
+    assert list(next(a for a in convs[0].attribute if a.name == "strides").ints) == [6]
+
+    x = np.random.default_rng(0).standard_normal((2, 64)).astype(np.float32)
+    base = ort.InferenceSession(original, providers=["CPUExecutionProvider"]).run(None, {"X": x})[0]
+    got = ort.InferenceSession(folded.SerializeToString(), providers=["CPUExecutionProvider"]).run(
+        None, {"X": x}
+    )[0]
+    assert base.shape == got.shape == (2, 9, 4)
+    assert np.abs(base - got).max() < 1e-4
+
+
+@pytest.mark.parametrize("mels", [9, 12], ids=["mels_equal_bins", "mels_above_bins"])
+def test_fold_frontend_to_conv_folds_filterbank_as_wide_as_the_dft(mels):
+    """The fold is linear for any filterbank width, so a mel matrix with as many or
+    more bands than DFT bins folds too, with the same output."""
+    import numpy as np
+    import onnxruntime as ort
+
+    from optimize import fold_frontend_to_conv
+
+    model = _make_framed_dft_mel_model(mels=mels)
+    original = model.SerializeToString()
+    folded, count = fold_frontend_to_conv(model)
+    assert count == 1
+    assert "MatMul" not in [n.op_type for n in folded.graph.node]
+
+    x = np.random.default_rng(0).standard_normal((2, 64)).astype(np.float32)
+    base = ort.InferenceSession(original, providers=["CPUExecutionProvider"]).run(None, {"X": x})[0]
+    got = ort.InferenceSession(folded.SerializeToString(), providers=["CPUExecutionProvider"]).run(
+        None, {"X": x}
+    )[0]
+    assert base.shape == got.shape == (2, 9, mels)
+    assert np.abs(base - got).max() < 1e-4
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"skew_frame": True},
+        {"abs_between": True},
+        *({"tap": t} for t in ("grp", "gathered", "frames", "windowed")),
+        {"expose": "gathered"},
+    ],
+    ids=[
+        "skewed_frame",
+        "nonlinear",
+        "tap_group_reshape",
+        "tap_gather",
+        "tap_frames_reshape",
+        "tap_hann_mul",
+        "exposed_gather",
+    ],
+)
+def test_fold_frontend_to_conv_skips_unfoldable(mutation):
+    """Non-contiguous framing, a nonlinearity between the DFT and mel MatMuls, or a
+    framing tensor that something else also reads is not a private linear strided
+    filter, so nothing is folded and the graph is untouched."""
+    from optimize import fold_frontend_to_conv
+
+    model = _make_framed_dft_mel_model(**mutation)
+    before = model.SerializeToString()
+    result, count = fold_frontend_to_conv(model)
+    assert count == 0
+    assert result.SerializeToString() == before
+
+
+def test_optimize_model_fails_when_fold_requested_but_not_applied(tmp_path: Path):
+    """A requested fold that cannot be applied fails the run instead of falling
+    back to truncation, so a truncated graph is never mistaken for a folded one."""
+    from optimize import optimize_model
+
+    mel = [[1.0, 0.0], [0.5, 0.5], [0.0, 1.0], [0.0, 0.0], [0.0, 0.0]]
+    src = tmp_path / "toy.onnx"
+    onnx.save(_make_dft_mel_model(mel), str(src))
+    assert optimize_model(str(src), fold_frontend=True) is None
+
+
+def test_fold_frontend_matches_default_on_real_audio(
+    optimized_fp32_path: Path, optimized_fold_fp32_path: Path, audio_windows
+):
+    """On real audio the folded build agrees with the default build (the only
+    difference between them is the fold): same top-1, logits within 5e-3."""
+    import numpy as np
+    import onnxruntime as ort
+
+    folded = onnx.load(str(optimized_fold_fp32_path))
+    init_rank = {i.name: len(i.dims) for i in folded.graph.initializer}
+    convs = [n for n in folded.graph.node if n.op_type == "Conv"]
+    assert [init_rank[c.input[1]] for c in convs[:2]] == [3, 3], "both bands fold to 1-D Convs"
+    ops = [n.op_type for n in folded.graph.node]
+    assert "Gather" not in ops
+    assert ops.count("MatMul") == 1, "only the classifier head MatMul should remain"
+
+    def logits(path: Path) -> np.ndarray:
+        session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        name = session.get_inputs()[0].name
+        return np.concatenate(
+            [
+                session.run(None, {name: audio_windows[i : i + 16]})[0]
+                for i in range(0, len(audio_windows), 16)
+            ]
+        )
+
+    ref = logits(optimized_fp32_path)
+    got = logits(optimized_fold_fp32_path)
+    assert ref.shape == got.shape == (len(audio_windows), 6522)
+    assert np.abs(ref - got).max() <= 5e-3
+    assert (ref.argmax(axis=1) == got.argmax(axis=1)).all()
+    top5_ref = np.sort(np.argsort(-ref, axis=1)[:, :5], axis=1)
+    top5_got = np.sort(np.argsort(-got, axis=1)[:, :5], axis=1)
+    assert (top5_ref == top5_got).all(axis=1).mean() >= 0.99
+
+
+def test_fold_frontend_fp16_keeps_fold_conv_fp32(optimized_fold_fp32_path: Path):
+    """The folded front-end Convs and the Pow nodes are protected, so
+    convert_to_fp16 keeps the fold weights FP32 (FP16 with --fp16-full) and the
+    protected model still runs in ONNX Runtime."""
+    import numpy as np
+    import onnxruntime as ort
+
+    from optimize import convert_to_fp16, find_preprocessing_node_names
+
+    base = onnx.load(str(optimized_fold_fp32_path))
+    init_rank = {i.name: len(i.dims) for i in base.graph.initializer}
+    fold_convs = [n for n in base.graph.node if n.op_type == "Conv" and init_rank[n.input[1]] == 3]
+    assert len(fold_convs) == 2
+    fold_weights = {n.input[1] for n in fold_convs}
+    preprocessing = find_preprocessing_node_names(base)
+    assert {n.name for n in fold_convs} <= preprocessing
+    assert {n.name for n in base.graph.node if n.op_type == "Pow"} <= preprocessing
+
+    def weight_dtypes(model: onnx.ModelProto) -> set[int]:
+        return {i.data_type for i in model.graph.initializer if i.name in fold_weights}
+
+    protected = convert_to_fp16(onnx.load(str(optimized_fold_fp32_path)))
+    full = convert_to_fp16(onnx.load(str(optimized_fold_fp32_path)), keep_preprocessing_fp32=False)
+    assert protected is not None and full is not None
+    assert weight_dtypes(protected) == {onnx.TensorProto.FLOAT}
+    assert weight_dtypes(full) == {onnx.TensorProto.FLOAT16}
+
+    session = ort.InferenceSession(
+        protected.SerializeToString(), providers=["CPUExecutionProvider"]
+    )
+    spec = session.get_inputs()[0]
+    shape = [d if isinstance(d, int) and d > 0 else 1 for d in spec.shape]
+    session.run(None, {spec.name: np.zeros(shape, dtype=np.float32)})
+
+
+class _FakeSession:
+    """Stand-in for onnxruntime.InferenceSession for the fold self-check.
+
+    The first session built is the original graph, the second the folded one.
+    `outputs[k]` maps "mel" (the intermediate mel tensor) and "out" (the real
+    graph output) to the arrays session k returns.
+    """
+
+    outputs: tuple = ()
+    built = 0
+
+    def __init__(self, model_bytes, providers=None):
+        self.index = _FakeSession.built
+        _FakeSession.built += 1
+        self.out_names = [o.name for o in onnx.load_model_from_string(model_bytes).graph.output]
+
+    def get_inputs(self):
+        from types import SimpleNamespace
+
+        return [SimpleNamespace(name="X", shape=[2, 64])]
+
+    def get_outputs(self):
+        from types import SimpleNamespace
+
+        return [SimpleNamespace(name=n) for n in self.out_names]
+
+    def run(self, _names, _feed):
+        mine = _FakeSession.outputs[self.index]
+        return [mine["out" if n == "out" else "mel"] for n in self.out_names]
+
+
+def _grid(value=1.0, **cells):
+    import numpy as np
+
+    a = np.full((2, 9, 4), value, dtype=np.float32)
+    for key, v in cells.items():
+        a[0, 0, int(key[1:])] = v
+    return a
+
+
+_INF, _NAN = float("inf"), float("nan")
+
+
+@pytest.mark.parametrize(
+    ("base_mel", "got_mel", "base_out", "got_out", "expect_folded"),
+    [
+        (_grid(), _grid(), _grid(), _grid(), True),
+        (_grid(), _grid(2.0), _grid(), _grid(), False),
+        (_grid(_NAN), _grid(), _grid(), _grid(), False),
+        (_grid(_INF), _grid(_INF), _grid(), _grid(), True),
+        (_grid(_INF), _grid(), _grid(), _grid(), False),
+        (_grid(c0=_INF), _grid(c0=_INF), _grid(), _grid(), True),
+        (_grid(c0=_INF), _grid(c0=_INF, c1=1.1), _grid(), _grid(), False),
+        (_grid(c0=_INF), _grid(c0=-_INF), _grid(), _grid(), False),
+        (_grid(), _grid()[:, :8], _grid(), _grid(), False),
+        (_grid(), _grid(), _grid(), _grid(3.0), False),
+        (_grid(), _grid(c0=_NAN), _grid(), _grid(), False),
+        (_grid(c0=_NAN), _grid(c0=_NAN), _grid(), _grid(), True),
+    ],
+    ids=[
+        "match",
+        "mel_mismatch",
+        "nan_baseline",
+        "equal_inf",
+        "inf_vs_finite",
+        "partly_inf_match",
+        "partly_inf_finite_mismatch",
+        "inf_sign_differs",
+        "mel_shape_mismatch",
+        "output_mismatch",
+        "nan_in_folded",
+        "nan_in_both",
+    ],
+)
+def test_fold_frontend_self_check_reverts(
+    monkeypatch, base_mel, got_mel, base_out, got_out, expect_folded
+):
+    """The self-check keeps the fold only when the folded mel tensor equals the
+    original (non-finite entries included) and the graph output agrees; on any
+    mismatch it reverts to the original graph bytes and reports 0."""
+    import onnxruntime
+
+    from optimize import fold_frontend_to_conv
+
+    model = _make_framed_dft_mel_model()
+    before = model.SerializeToString()
+    _FakeSession.built = 0
+    _FakeSession.outputs = (
+        {"mel": base_mel, "out": base_out},
+        {"mel": got_mel, "out": got_out},
+    )
+    monkeypatch.setattr(onnxruntime, "InferenceSession", _FakeSession)
+
+    result, count = fold_frontend_to_conv(model)
+    assert count == (1 if expect_folded else 0)
+    assert (result.SerializeToString() != before) is expect_folded
+
+
+def test_fold_frontend_self_check_reverts_on_ort_error(monkeypatch):
+    """An ONNX Runtime failure during the self-check reverts the fold."""
+    import onnxruntime
+
+    from optimize import fold_frontend_to_conv
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("ORT failed")
+
+    model = _make_framed_dft_mel_model()
+    before = model.SerializeToString()
+    monkeypatch.setattr(onnxruntime, "InferenceSession", broken)
+    result, count = fold_frontend_to_conv(model)
+    assert count == 0
+    assert result.SerializeToString() == before
+
+
+def test_optimize_model_fails_when_fold_leaves_a_dft_matmul(tmp_path: Path):
+    """One band folds but another DFT MatMul stays: the fold alone reports 1, and
+    optimize_model refuses the half-folded graph instead of returning it."""
+    from optimize import fold_frontend_to_conv, optimize_model
+
+    _, count = fold_frontend_to_conv(_make_framed_dft_mel_model(leftover_dft=True))
+    assert count == 1
+
+    src = tmp_path / "half.onnx"
+    onnx.save(_make_framed_dft_mel_model(leftover_dft=True), str(src))
+    assert optimize_model(str(src), fold_frontend=True) is None
+
+
+def _rename_graph(model, prefix):
+    """Prefix every node, tensor and initializer name except the shared input X."""
+    keep = {"X"}
+    new = lambda n: n if n in keep or not n else prefix + n  # noqa: E731
+    for node in model.graph.node:
+        node.name = new(node.name)
+        node.input[:] = [new(i) for i in node.input]
+        node.output[:] = [new(o) for o in node.output]
+    for init in model.graph.initializer:
+        init.name = new(init.name)
+    for out in model.graph.output:
+        out.name = new(out.name)
+    return model
+
+
+def test_fold_frontend_to_conv_folds_two_bands_sharing_one_waveform():
+    """Two bands read the same waveform: each becomes its own Conv with its own
+    weight, one Unsqueeze feeds both, and both outputs keep their values."""
+    import numpy as np
+    import onnxruntime as ort
+
+    from optimize import fold_frontend_to_conv
+
+    a = _rename_graph(_make_framed_dft_mel_model(seed=1), "a_")
+    b = _rename_graph(_make_framed_dft_mel_model(seed=2), "b_")
+    a.graph.node.extend(b.graph.node)
+    a.graph.initializer.extend(b.graph.initializer)
+    a.graph.output.extend(b.graph.output)
+    original = a.SerializeToString()
+
+    folded, count = fold_frontend_to_conv(a)
+    assert count == 2
+    ops = [n.op_type for n in folded.graph.node]
+    assert ops.count("Unsqueeze") == 1 and ops.count("Conv") == 2
+    assert "Gather" not in ops and "MatMul" not in ops
+
+    x = np.random.default_rng(0).standard_normal((2, 64)).astype(np.float32)
+    run = lambda m: ort.InferenceSession(m, providers=["CPUExecutionProvider"]).run(None, {"X": x})  # noqa: E731
+    base, got = run(original), run(folded.SerializeToString())
+    assert len(base) == len(got) == 2
+    for want, have in zip(base, got):
+        assert np.abs(want - have).max() < 1e-4
+    assert np.abs(got[0] - got[1]).max() > 1e-3, "bands must carry different weights"
+
+
+def test_find_preprocessing_node_names_falls_back_to_first_conv_without_2d_conv():
+    """With only 1-D Convs the anchor is the first Conv, as before the 2-D rule:
+    nodes after it are not front end."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import find_preprocessing_node_names
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, 16])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [1, 2, 4])
+    inits = [
+        numpy_helper.from_array(np.array([2.0], dtype=np.float32), name="scale"),
+        numpy_helper.from_array(np.array([1], dtype=np.int64), name="axes"),
+        numpy_helper.from_array(np.ones((2, 1, 4), dtype=np.float32), name="w1"),
+        numpy_helper.from_array(np.ones((2, 2, 1), dtype=np.float32), name="w2"),
+    ]
+    nodes = [
+        h.make_node("Mul", ["X", "scale"], ["xs"], name="pre_mul"),
+        h.make_node("Unsqueeze", ["xs", "axes"], ["x3"], name="pre_unsqueeze"),
+        h.make_node("Conv", ["x3", "w1"], ["c1"], name="conv1", strides=[3]),
+        h.make_node("Relu", ["c1"], ["r"], name="between_relu"),
+        h.make_node("Conv", ["r", "w2"], ["out"], name="conv2"),
+    ]
+    graph = h.make_graph(nodes, "only_1d", [x], [out], inits)
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    assert find_preprocessing_node_names(model) == {"pre_mul", "pre_unsqueeze"}
