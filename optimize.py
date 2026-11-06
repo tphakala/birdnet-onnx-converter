@@ -1633,13 +1633,13 @@ def quantize_to_int8_arm(model_path: str, output_path: str) -> bool:
 
 def _const_2d_weight(
     node: onnx.NodeProto, arr: dict[str, np.ndarray]
-) -> tuple[Optional[str], Optional[np.ndarray]]:
-    """Return (name, array) of the first constant rank-2 input of `node`, else (None, None)."""
+) -> Optional[tuple[str, np.ndarray]]:
+    """Return (name, array) of the first constant rank-2 input of `node`, else None."""
     for inp in node.input:
         a = arr.get(inp)
         if a is not None and a.ndim == 2:
             return inp, a
-    return None, None
+    return None
 
 
 def _find_dft_matmuls(
@@ -1651,13 +1651,24 @@ def _find_dft_matmuls(
     for node in graph.node:
         if node.op_type != "MatMul":
             continue
-        wname, w = _const_2d_weight(node, arr)
-        if wname is None or w is None:
+        weight = _const_2d_weight(node, arr)
+        if weight is None:
             continue
+        wname, w = weight
         f, b = w.shape
         if b == f // 2 + 1 and float(w.min()) >= -1.001 and float(w.max()) <= 1.001:
             found.append((node, wname, f, b))
     return found
+
+
+def _has_dft_matmul(model: onnx.ModelProto) -> bool:
+    """True if the graph still contains a DFT-shaped MatMul (decodes only rank-2 constants)."""
+    arr = {
+        init.name: numpy_helper.to_array(init)
+        for init in model.graph.initializer
+        if len(init.dims) == 2
+    }
+    return bool(_find_dft_matmuls(model.graph, arr))
 
 
 def truncate_dft_bins(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
@@ -1698,12 +1709,12 @@ def truncate_dft_bins(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]:
     for node in graph.node:
         if node.op_type != "MatMul":
             continue
-        _wname, w = _const_2d_weight(node, arr)
-        if w is None:
+        weight = _const_2d_weight(node, arr)
+        if weight is None:
             continue
-        b, m = w.shape
+        b, m = weight[1].shape
         if b in dft_bins and m < b:
-            melfb_by_bins.setdefault(b, w)
+            melfb_by_bins.setdefault(b, weight[1])
 
     # Ranks for the Pad's `pads` vector (the bin axis is the last axis).
     try:
@@ -2158,9 +2169,7 @@ def optimize_model(
         print("\n[13/15] Folding spectrogram front end into Conv...")
         model, folded = fold_frontend_to_conv(model)
         print(f"  Folded: {folded} spectrogram branch(es)")
-        if folded == 0 or _find_dft_matmuls(
-            model.graph, {i.name: numpy_helper.to_array(i) for i in model.graph.initializer}
-        ):
+        if folded == 0 or _has_dft_matmul(model):
             print("  ERROR: --fold-frontend was requested but the front end was not fully folded")
             return None
     elif truncate_dft:
