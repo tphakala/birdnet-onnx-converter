@@ -1064,6 +1064,7 @@ _INF, _NAN = float("inf"), float("nan")
         (_grid(c0=_INF), _grid(c0=-_INF), _grid(), _grid(), False),
         (_grid(), _grid()[:, :8], _grid(), _grid(), False),
         (_grid(), _grid(), _grid(), _grid(3.0), False),
+        (_grid(), _grid(c0=_NAN), _grid(), _grid(), False),
     ],
     ids=[
         "match",
@@ -1076,6 +1077,7 @@ _INF, _NAN = float("inf"), float("nan")
         "inf_sign_differs",
         "mel_shape_mismatch",
         "output_mismatch",
+        "nan_in_folded",
     ],
 )
 def test_fold_frontend_self_check_reverts(
