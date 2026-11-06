@@ -725,3 +725,18 @@ def test_truncate_dft_bins_reverts_when_a_secondary_output_changes():
     reverted, count = truncate_dft_bins(model)
     assert count == 0, "truncation must revert when a secondary output would change"
     assert reverted.SerializeToString() == before, "graph must be byte-identical after revert"
+
+
+def test_create_dft_matrix_matches_exact_rfft():
+    """The cosine basis must match the real part of an exact rfft to float32
+    rounding. Building the phase in float32 drifts by up to ~6e-4 at BirdNET's
+    FFT sizes, enough to move confidences away from the TFLite reference."""
+    import numpy as np
+
+    from optimize import create_dft_matrix
+
+    for fft_size in (1024, 2048):  # BirdNET v2.4 high and low band
+        matrix = create_dft_matrix(fft_size)
+        expected = np.fft.rfft(np.eye(fft_size), axis=1).real
+        assert matrix.dtype == np.float32
+        np.testing.assert_allclose(matrix, expected, rtol=0, atol=1e-7)
