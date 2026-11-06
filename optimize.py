@@ -1833,7 +1833,9 @@ def fold_frontend_to_conv(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]
     ``[F//2+1, M]`` mel MatMul, and checks that the gather index table is a regular
     framing (``idx[k, m] * g == k * hop + m * g``) covering the waveform. A branch
     that does not match, or has any other op (Abs, Relu, a magnitude) between the
-    two MatMuls, is left alone, so complex-STFT front ends are not touched.
+    two MatMuls, is left alone, so complex-STFT front ends are not touched. So is
+    a branch whose intermediate tensors (everything between the waveform and the
+    mel tensor) are read by anything else or are graph outputs.
 
     A numeric self-check compares the linear mel tensor of every folded branch
     (and all graph outputs) against the original graph on seeded input and
@@ -1855,7 +1857,7 @@ def fold_frontend_to_conv(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]
     if opset < 13 or not dft_matmuls:
         return model, 0
 
-    producer = {out: n for n in graph.node for out in n.output if out}
+    producer: dict[str, onnx.NodeProto] = {out: n for n in graph.node for out in n.output if out}
     consumers: dict[str, list[onnx.NodeProto]] = {}
     for n in graph.node:
         for inp in n.input:
@@ -1863,8 +1865,11 @@ def fold_frontend_to_conv(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int]
     graph_outputs = {o.name for o in graph.output}
 
     def producing(tensor: str, op_type: str) -> Optional[onnx.NodeProto]:
+        """The `op_type` node producing `tensor`, if nothing else reads that tensor."""
         node = producer.get(tensor)
-        return node if node is not None and node.op_type == op_type else None
+        if node is None or node.op_type != op_type or sole_consumer(tensor) is None:
+            return None
+        return node
 
     def reshape_target(node: onnx.NodeProto) -> Optional[list[int]]:
         shape = arr.get(node.input[1]) if len(node.input) > 1 else None

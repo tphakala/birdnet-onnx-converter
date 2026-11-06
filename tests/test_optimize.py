@@ -777,7 +777,7 @@ def test_create_dft_matrix_matches_exact_rfft():
         np.testing.assert_allclose(matrix, expected, rtol=0, atol=1e-7)
 
 
-def _make_framed_dft_mel_model(skew_frame=False, abs_between=False):
+def _make_framed_dft_mel_model(skew_frame=False, abs_between=False, tap=None, expose=None):
     """A BirdNET-shaped framed spectrogram front end on a [2, 64] waveform.
 
     X -> Reshape [-1, 32, 2] -> Gather(idx[9, 8], axis=1) -> Reshape [-1, 9, 16]
@@ -787,7 +787,9 @@ def _make_framed_dft_mel_model(skew_frame=False, abs_between=False):
     That is F=16 samples per frame, hop=6, gather group g=2, 9 frames. skew_frame
     shifts one frame index (non-contiguous framing); abs_between inserts an Abs
     between the DFT and mel MatMuls (a nonlinear magnitude, as in complex-STFT
-    front ends).
+    front ends). tap names a framing tensor that gets a second consumer (an
+    Identity feeding an extra graph output); expose names one that becomes a graph
+    output itself.
     """
     import numpy as np
     import onnx.helper as h
@@ -835,7 +837,19 @@ def _make_framed_dft_mel_model(skew_frame=False, abs_between=False):
         h.make_node("Reshape", ["mel_flat", "shape_mel"], ["mel_out"], name="reshape_mel"),
         h.make_node("Mul", ["mel_out", "mel_out"], ["out"], name="square"),
     ]
-    graph = h.make_graph(nodes, "framed_dft_mel", [x], [out], inits)
+    shapes = {
+        "grp": [2, 32, 2],
+        "gathered": [2, frames, fft // group, group],
+        "frames": [2, frames, fft],
+        "windowed": [2, frames, fft],
+    }
+    outputs = [out]
+    if tap is not None:
+        nodes.append(h.make_node("Identity", [tap], ["tap_out"], name="tap_identity"))
+        outputs.append(h.make_tensor_value_info("tap_out", TensorProto.FLOAT, shapes[tap]))
+    if expose is not None:
+        outputs.append(h.make_tensor_value_info(expose, TensorProto.FLOAT, shapes[expose]))
+    graph = h.make_graph(nodes, "framed_dft_mel", [x], outputs, inits)
     model = h.make_model(graph, opset_imports=[h.make_opsetid("", 17)])
     model.ir_version = 9
     return model
@@ -872,11 +886,27 @@ def test_fold_frontend_to_conv_matches_framed_dft_mel():
 
 
 @pytest.mark.parametrize(
-    "mutation", [{"skew_frame": True}, {"abs_between": True}], ids=["skewed_frame", "nonlinear"]
+    "mutation",
+    [
+        {"skew_frame": True},
+        {"abs_between": True},
+        *({"tap": t} for t in ("grp", "gathered", "frames", "windowed")),
+        {"expose": "gathered"},
+    ],
+    ids=[
+        "skewed_frame",
+        "nonlinear",
+        "tap_group_reshape",
+        "tap_gather",
+        "tap_frames_reshape",
+        "tap_hann_mul",
+        "exposed_gather",
+    ],
 )
 def test_fold_frontend_to_conv_skips_unfoldable(mutation):
-    """Non-contiguous framing or a nonlinearity between the DFT and mel MatMuls is
-    not a linear strided filter, so nothing is folded and the graph is untouched."""
+    """Non-contiguous framing, a nonlinearity between the DFT and mel MatMuls, or a
+    framing tensor that something else also reads is not a private linear strided
+    filter, so nothing is folded and the graph is untouched."""
     from optimize import fold_frontend_to_conv
 
     model = _make_framed_dft_mel_model(**mutation)
