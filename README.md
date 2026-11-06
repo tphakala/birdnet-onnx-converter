@@ -131,7 +131,7 @@ python optimize.py --input mdata_raw.onnx --output mdata_where.onnx \
 | `*_int8_arm.onnx` | Partial INT8 (MatMul-only, front-end FP32), `--int8-arm` | RPi 4/5 / ARM, low RAM (recommended) |
 
 For both FP16 and INT8, the spectrogram preprocessing front-end (STFT/mel
-MatMuls and normalization) is kept in full precision to preserve accuracy;
+MatMuls, or the folded front-end Conv, and normalization) is kept in full precision to preserve accuracy;
 only the CNN backbone is reduced.
 
 > **Validate INT8 accuracy before production.** The all-ops INT8 model
@@ -169,8 +169,8 @@ accuracy-critical spectrogram front-end:
 - **FP16 preprocessing protection** - Keeps the STFT/mel MatMuls (or the folded
   front-end Conv) and normalization in FP32 (the CNN backbone goes FP16);
   `--fp16-full` opts out.
-- **INT8 preprocessing exclusion** - Excludes the spectrogram MatMuls from INT8
-  quantization and refreshes `value_info` before quantizing so tensor types are
+- **INT8 preprocessing exclusion** - Excludes the spectrogram MatMuls (or the folded
+  front-end Conv) from INT8 quantization and refreshes `value_info` before quantizing so tensor types are
   classified correctly.
 
 ## Supported Models

@@ -357,7 +357,7 @@ def test_find_preprocessing_node_names_protects_1d_frontend_conv():
     model.ir_version = 9
 
     names = find_preprocessing_node_names(model)
-    assert {"fold_unsqueeze", "fold_transpose", "fold_reshape"} <= names
+    assert {"fold_unsqueeze", "fold_conv", "fold_transpose", "fold_reshape"} <= names
     assert "stem_conv" not in names
 
 
