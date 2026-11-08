@@ -1538,3 +1538,45 @@ def test_roundtrip_removal_keeps_orphan_cast_read_inside_subgraph():
     assert remove_fp16_roundtrip_casts(model) == 1
     assert "cq" in [n.name for n in model.graph.node]
     onnx.checker.check_model(model, full_check=True)
+
+
+def test_roundtrip_removal_keeps_cast_read_inside_nested_subgraph():
+    """The reader sits in an If inside an If body; the walk must reach it."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    from optimize import remove_fp16_roundtrip_casts
+
+    def neg_branch(name: str) -> onnx.GraphProto:
+        out = h.make_tensor_value_info(f"{name}_out", TensorProto.FLOAT, [2])
+        return h.make_graph([h.make_node("Neg", ["b"], [f"{name}_out"])], name, [], [out])
+
+    inner_out = h.make_tensor_value_info("inner_out", TensorProto.FLOAT, [2])
+    inner_if = h.make_node(
+        "If",
+        ["cond"],
+        ["inner_out"],
+        then_branch=neg_branch("it"),
+        else_branch=neg_branch("ie"),
+    )
+    outer_then = h.make_graph([inner_if], "outer_then", [], [inner_out])
+    pass_out = h.make_tensor_value_info("pass_out", TensorProto.FLOAT, [2])
+    outer_else = h.make_graph(
+        [h.make_node("Identity", ["cond_x"], ["pass_out"])], "outer_else", [], [pass_out]
+    )
+    cond = h.make_tensor_value_info("cond", TensorProto.BOOL, [])
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2])
+    cond_x = h.make_tensor_value_info("cond_x", TensorProto.FLOAT, [2])
+    y = h.make_tensor_value_info("y", TensorProto.FLOAT, [2])
+    nodes = [
+        h.make_node("Cast", ["x"], ["a"], name="c16", to=TensorProto.FLOAT16),
+        h.make_node("Cast", ["a"], ["b"], name="c32", to=TensorProto.FLOAT),
+        h.make_node("If", ["cond"], ["y"], then_branch=outer_then, else_branch=outer_else),
+    ]
+    model = h.make_model(
+        h.make_graph(nodes, "g", [cond, x, cond_x], [y]), opset_imports=[h.make_opsetid("", 18)]
+    )
+    model.ir_version = 9
+
+    assert remove_fp16_roundtrip_casts(model) == 0
+    onnx.checker.check_model(model, full_check=True)
