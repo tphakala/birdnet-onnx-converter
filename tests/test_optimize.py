@@ -1580,3 +1580,24 @@ def test_roundtrip_removal_keeps_cast_read_inside_nested_subgraph():
 
     assert remove_fp16_roundtrip_casts(model) == 0
     onnx.checker.check_model(model, full_check=True)
+
+
+def test_shield_leaves_unknown_rank_operand_alone():
+    """An operand with no shape information may be a scalar, so a rank-1 copy of
+    the epsilon is not safe and nothing is shielded."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import shield_tiny_additive_constants
+
+    eps = numpy_helper.from_array(np.array(1e-10, dtype=np.float32), name="eps")
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, None)
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, None)
+    model = h.make_model(
+        h.make_graph([h.make_node("Add", ["x", "eps"], ["out"])], "g", [x], [out], [eps]),
+        opset_imports=[h.make_opsetid("", 18)],
+    )
+    model.ir_version = 9
+
+    assert shield_tiny_additive_constants(model) == 0
