@@ -168,7 +168,13 @@ accuracy-critical spectrogram front-end:
   (e.g. the v2.4 embeddings model); external output names are preserved.
 - **FP16 preprocessing protection** - Keeps the STFT/mel MatMuls (or the folded
   front-end Conv) and normalization in FP32 (the CNN backbone goes FP16);
-  `--fp16-full` opts out.
+  `--fp16-full` opts out. Initializers shared between the front end and the backbone
+  are split so each side keeps its own precision, and no FP16 Cast round trip is
+  left between front-end nodes.
+- **Tiny constants kept** - A scalar Add/Sub constant within 1e-8 of zero (such as the
+  1e-10 normalization epsilon) is kept through the onnxscript pass when the other
+  operand is known to have rank 1 or more; otherwise the pass would delete it as a
+  no-op and make constant input divide 0 by 0.
 - **INT8 preprocessing exclusion** - Excludes the spectrogram MatMuls (or the folded
   front-end Conv) from INT8 quantization and refreshes `value_info` before quantizing so tensor types are
   classified correctly.
