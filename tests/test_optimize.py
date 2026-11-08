@@ -1502,3 +1502,39 @@ def test_shield_leaves_scalar_operand_alone():
 
     assert shield_tiny_additive_constants(model) == 0
     assert [i.name for i in model.graph.initializer] == ["eps"]
+
+
+def test_roundtrip_removal_keeps_orphan_cast_read_inside_subgraph():
+    """An FP16 Cast read only by an If body has no top-level consumer, but deleting
+    it as an orphan would leave the body reading an undefined tensor."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    from optimize import remove_fp16_roundtrip_casts
+
+    out = h.make_tensor_value_info("t_out", TensorProto.FLOAT16, [2])
+    body = h.make_graph([h.make_node("Neg", ["q"], ["t_out"])], "body", [], [out])
+    else_out = h.make_tensor_value_info("e_out", TensorProto.FLOAT16, [2])
+    else_body = h.make_graph([h.make_node("Neg", ["q"], ["e_out"])], "else", [], [else_out])
+    cond = h.make_tensor_value_info("cond", TensorProto.BOOL, [])
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2])
+    w = h.make_tensor_value_info("w", TensorProto.FLOAT, [2])
+    outputs = [
+        h.make_tensor_value_info("y", TensorProto.FLOAT, [2]),
+        h.make_tensor_value_info("r", TensorProto.FLOAT16, [2]),
+    ]
+    nodes = [
+        h.make_node("Cast", ["x"], ["a"], name="c16", to=TensorProto.FLOAT16),
+        h.make_node("Cast", ["a"], ["b"], name="c32", to=TensorProto.FLOAT),
+        h.make_node("Neg", ["b"], ["y"], name="use_b"),
+        h.make_node("Cast", ["w"], ["q"], name="cq", to=TensorProto.FLOAT16),
+        h.make_node("If", ["cond"], ["r"], name="branch", then_branch=body, else_branch=else_body),
+    ]
+    model = h.make_model(
+        h.make_graph(nodes, "g", [cond, x, w], outputs), opset_imports=[h.make_opsetid("", 18)]
+    )
+    model.ir_version = 9
+
+    assert remove_fp16_roundtrip_casts(model) == 1
+    assert "cq" in [n.name for n in model.graph.node]
+    onnx.checker.check_model(model, full_check=True)
