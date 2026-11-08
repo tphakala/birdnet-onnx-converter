@@ -1371,6 +1371,57 @@ def test_onnxscript_pass_keeps_tiny_epsilon_add():
     assert list(scalar.dims) == []
 
 
+def _make_cast_pair_model(*, extra_fp16_consumer: bool = False, as_output: bool = False):
+    """x -> Cast(FP16) a -> Cast(FP32) b, with b read by Neg (or exposed as the
+    graph output), and optionally a also read by a second Neg."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2])
+    nodes = [
+        h.make_node("Cast", ["x"], ["a"], name="c16", to=TensorProto.FLOAT16),
+        h.make_node("Cast", ["a"], ["b"], name="c32", to=TensorProto.FLOAT),
+    ]
+    outputs = [h.make_tensor_value_info("b", TensorProto.FLOAT, [2])]
+    if not as_output:
+        nodes.append(h.make_node("Neg", ["b"], ["y"], name="use_b"))
+        outputs = [h.make_tensor_value_info("y", TensorProto.FLOAT, [2])]
+    if extra_fp16_consumer:
+        nodes.append(h.make_node("Neg", ["a"], ["z"], name="use_a"))
+        outputs.append(h.make_tensor_value_info("z", TensorProto.FLOAT16, [2]))
+    graph = h.make_graph(nodes, "cast_pair", [x], outputs)
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+    return model
+
+
+def test_roundtrip_removal_drops_orphaned_fp16_cast():
+    from optimize import remove_fp16_roundtrip_casts
+
+    model = _make_cast_pair_model()
+    assert remove_fp16_roundtrip_casts(model) == 1
+    assert [n.op_type for n in model.graph.node] == ["Neg"]
+    assert model.graph.node[0].input[0] == "x"
+    onnx.checker.check_model(model, full_check=True)
+
+
+def test_roundtrip_removal_keeps_fp16_cast_with_other_consumers():
+    from optimize import remove_fp16_roundtrip_casts
+
+    model = _make_cast_pair_model(extra_fp16_consumer=True)
+    assert remove_fp16_roundtrip_casts(model) == 1
+    assert [n.name for n in model.graph.node if n.op_type == "Cast"] == ["c16"]
+    onnx.checker.check_model(model, full_check=True)
+
+
+def test_roundtrip_removal_keeps_cast_feeding_graph_output():
+    from optimize import remove_fp16_roundtrip_casts
+
+    model = _make_cast_pair_model(as_output=True)
+    assert remove_fp16_roundtrip_casts(model) == 0
+    assert [n.name for n in model.graph.node] == ["c16", "c32"]
+
+
 def test_roundtrip_removal_keeps_cast_read_inside_subgraph():
     """An If branch reads b by outer-scope name; bypassing the Cast would leave the
     branch reading a tensor nothing produces."""
@@ -1400,3 +1451,54 @@ def test_roundtrip_removal_keeps_cast_read_inside_subgraph():
 
     assert remove_fp16_roundtrip_casts(model) == 0
     onnx.checker.check_model(model, full_check=True)
+
+
+@pytest.mark.parametrize("op", ["Add", "Sub"])
+@pytest.mark.parametrize("as_constant_node", [False, True])
+def test_shield_keeps_tiny_scalar_operand(op: str, as_constant_node: bool):
+    """Add and Sub with a 1e-10 scalar survive the onnxscript pass whether the
+    scalar is an initializer or a Constant node."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    pytest.importorskip("onnxscript")
+    from optimize import optimize_with_onnxscript
+
+    eps = numpy_helper.from_array(np.array(1e-10, dtype=np.float32), name="eps")
+    nodes = [h.make_node(op, ["x", "eps"], ["out"], name="eps_op")]
+    inits = [eps]
+    if as_constant_node:
+        nodes.insert(0, h.make_node("Constant", [], ["eps"], value=eps))
+        inits = []
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2, 3])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [2, 3])
+    model = h.make_model(
+        h.make_graph(nodes, "g", [x], [out], inits), opset_imports=[h.make_opsetid("", 18)]
+    )
+    model.ir_version = 9
+
+    result = optimize_with_onnxscript(model, remove_casts=False)
+    assert [n.op_type for n in result.graph.node] == [op]
+
+
+def test_shield_leaves_scalar_operand_alone():
+    """With a rank-0 other operand a rank-1 copy would turn the scalar result into
+    shape [1], so nothing is shielded."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import shield_tiny_additive_constants
+
+    eps = numpy_helper.from_array(np.array(1e-10, dtype=np.float32), name="eps")
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [])
+    model = h.make_model(
+        h.make_graph([h.make_node("Add", ["x", "eps"], ["out"])], "g", [x], [out], [eps]),
+        opset_imports=[h.make_opsetid("", 18)],
+    )
+    model.ir_version = 9
+
+    assert shield_tiny_additive_constants(model) == 0
+    assert [i.name for i in model.graph.initializer] == ["eps"]
