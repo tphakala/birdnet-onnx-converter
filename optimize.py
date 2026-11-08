@@ -1536,6 +1536,17 @@ def untie_blocked_shared_initializers(model: onnx.ModelProto, block_names: set[s
     return split
 
 
+def _subgraph_inputs(node: onnx.NodeProto) -> set[str]:
+    """Names read by the nodes inside the subgraphs of node (recursively)."""
+    names: set[str] = set()
+    for attr in node.attribute:
+        for body in chain([attr.g], attr.graphs):
+            for inner in body.node:
+                names.update(inner.input)
+                names.update(_subgraph_inputs(inner))
+    return names
+
+
 def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
     """Drop FP32 -> FP16 -> FP32 Cast pairs left inside the FP32 region.
 
@@ -1545,7 +1556,8 @@ def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
     FP16 inside a region that is meant to stay FP32, and its own pair cleanup
     does not catch every case. Consumers of the second Cast are rewired to the
     original FP32 tensor, and Cast nodes left without consumers are removed.
-    Cast pairs whose first input is not known to be FP32 are left alone. Runs
+    Cast pairs whose first input is not known to be FP32, or whose second output
+    is a graph output or is read inside a subgraph, are left alone. Runs
     after conversion; mutates the model in place. Returns the number of pairs
     bypassed.
     """
@@ -1565,6 +1577,9 @@ def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
         return next((attr.i for attr in node.attribute if attr.name == "to"), None)
 
     producer = {out: node for node in graph.node for out in node.output if out}
+    # Subgraph bodies read outer tensors by name without listing them on the owning
+    # node, so a name used there is neither rewired nor free to delete.
+    captured = {inp for node in graph.node for inp in _subgraph_inputs(node)}
     graph_outputs = {o.name for o in graph.output}
 
     bypassed: dict[str, str] = {}
@@ -1579,7 +1594,7 @@ def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
         if source in fp32_tensors or (
             origin is not None and cast_target(origin) == onnx.TensorProto.FLOAT
         ):
-            if node.output[0] not in graph_outputs:
+            if node.output[0] not in graph_outputs | captured:
                 bypassed[node.output[0]] = source
     if not bypassed:
         return 0
@@ -1596,7 +1611,7 @@ def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
 
     # Remove the second Casts, then any first Cast nothing reads any more.
     keep = [n for n in graph.node if not (n.op_type == "Cast" and n.output[0] in bypassed)]
-    consumed = {i for n in keep for i in n.input} | graph_outputs
+    consumed = {i for n in keep for i in n.input} | graph_outputs | captured
     removed = set(bypassed)
     final = []
     for n in keep:

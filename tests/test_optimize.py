@@ -1369,3 +1369,34 @@ def test_onnxscript_pass_keeps_tiny_epsilon_add():
     clip = next(n for n in model.graph.node if n.op_type == "Clip")
     scalar = next(i for i in model.graph.initializer if i.name == clip.input[1])
     assert list(scalar.dims) == []
+
+
+def test_roundtrip_removal_keeps_cast_read_inside_subgraph():
+    """An If branch reads b by outer-scope name; bypassing the Cast would leave the
+    branch reading a tensor nothing produces."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    from optimize import remove_fp16_roundtrip_casts
+
+    def branch(name: str) -> onnx.GraphProto:
+        out = h.make_tensor_value_info(f"{name}_out", TensorProto.FLOAT, [2])
+        return h.make_graph([h.make_node("Neg", ["b"], [f"{name}_out"])], name, [], [out])
+
+    cond = h.make_tensor_value_info("cond", TensorProto.BOOL, [])
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2])
+    y = h.make_tensor_value_info("y", TensorProto.FLOAT, [2])
+    nodes = [
+        h.make_node("Cast", ["x"], ["a"], name="c16", to=TensorProto.FLOAT16),
+        h.make_node("Cast", ["a"], ["b"], name="c32", to=TensorProto.FLOAT),
+        h.make_node(
+            "If", ["cond"], ["y"], name="branch", then_branch=branch("t"), else_branch=branch("e")
+        ),
+    ]
+    model = h.make_model(
+        h.make_graph(nodes, "g", [cond, x], [y]), opset_imports=[h.make_opsetid("", 18)]
+    )
+    model.ir_version = 9
+
+    assert remove_fp16_roundtrip_casts(model) == 0
+    onnx.checker.check_model(model, full_check=True)
