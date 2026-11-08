@@ -957,13 +957,39 @@ def optimize_with_onnxslim(model: onnx.ModelProto) -> onnx.ModelProto:
 # scalar constant within 1e-8 of zero and delete the Add/Sub as a no-op. A scalar
 # epsilon such as the 1e-10 in x / (max - min + 1e-10) is inside that window, so the
 # optimizer drops it and the division yields 0/0 on constant input. The matcher only
-# accepts rank-0 constants, so a rank-1 copy of the epsilon is left alone.
+# accepts rank-0 constants, so a rank-1 copy of the epsilon is left alone. The limit
+# is wider than the matcher's 1e-8 on purpose: the copy does not change any value, and
+# the margin still covers a looser tolerance in a later onnxscript release.
 _TINY_CONSTANT_LIMIT = 1e-6
 _FLOAT_TYPES = (
     onnx.TensorProto.FLOAT,
     onnx.TensorProto.FLOAT16,
     onnx.TensorProto.DOUBLE,
 )
+
+
+def _graph_tensor_names(graph: onnx.GraphProto) -> set[str]:
+    """Tensor names of graph and its subgraphs (recursively): inputs, outputs,
+    value_info, initializers, and node inputs and outputs."""
+    names = {t.name for t in chain(graph.input, graph.output, graph.value_info, graph.initializer)}
+    for node in graph.node:
+        names.update(node.input)
+        names.update(node.output)
+        for attr in node.attribute:
+            for body in chain([attr.g], attr.graphs):
+                names.update(_graph_tensor_names(body))
+    return names
+
+
+def _fresh_name(base: str, used: set[str]) -> str:
+    """Return base, or base_2, base_3, ... if taken, and mark it used."""
+    name = base
+    suffix = 1
+    while name in used:
+        suffix += 1
+        name = f"{base}_{suffix}"
+    used.add(name)
+    return name
 
 
 def shield_tiny_additive_constants(model: onnx.ModelProto) -> int:
@@ -1015,18 +1041,13 @@ def shield_tiny_additive_constants(model: onnx.ModelProto) -> int:
     }
     rank.update({init.name: len(init.dims) for init in model.graph.initializer})
 
-    used = {init.name for init in model.graph.initializer}
+    used = _graph_tensor_names(model.graph)
     shielded = 0
     for node, idx in candidates:
         if rank.get(node.input[1 - idx], 0) < 1:
             continue
         name = node.input[idx]
-        copy_name = f"{name}_shielded"
-        suffix = 1
-        while copy_name in used:
-            suffix += 1
-            copy_name = f"{name}_shielded{suffix}"
-        used.add(copy_name)
+        copy_name = _fresh_name(f"{name}_shielded", used)
         value = constants[name].reshape(1)
         model.graph.initializer.append(numpy_helper.from_array(value, copy_name))
         node.input[idx] = copy_name
@@ -1513,19 +1534,10 @@ def untie_blocked_shared_initializers(model: onnx.ModelProto, block_names: set[s
             else:
                 has_free_user.add(inp)
 
-    used = {init.name for init in model.graph.initializer}
-    for node in model.graph.node:
-        used.update(node.input)
-        used.update(node.output)
-
+    used = _graph_tensor_names(model.graph)
     split = 0
     for name in sorted(has_free_user & blocked_users.keys()):
-        copy_name = f"{name}_fp32"
-        suffix = 1
-        while copy_name in used:
-            suffix += 1
-            copy_name = f"{name}_fp32_{suffix}"
-        used.add(copy_name)
+        copy_name = _fresh_name(f"{name}_fp32", used)
         copy = onnx.TensorProto()
         copy.CopyFrom(float32_inits[name])
         copy.name = copy_name
@@ -1536,14 +1548,16 @@ def untie_blocked_shared_initializers(model: onnx.ModelProto, block_names: set[s
     return split
 
 
-def _subgraph_inputs(node: onnx.NodeProto) -> set[str]:
-    """Names read by the nodes inside the subgraphs of node (recursively)."""
+def _subgraph_reads(node: onnx.NodeProto) -> set[str]:
+    """Names read inside the subgraphs of node (recursively): node inputs and
+    graph outputs, since a body may return an outer tensor directly."""
     names: set[str] = set()
     for attr in node.attribute:
         for body in chain([attr.g], attr.graphs):
+            names.update(o.name for o in body.output)
             for inner in body.node:
                 names.update(inner.input)
-                names.update(_subgraph_inputs(inner))
+                names.update(_subgraph_reads(inner))
     return names
 
 
@@ -1570,6 +1584,7 @@ def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
         for vi in graph.value_info
         if vi.type.tensor_type.elem_type == onnx.TensorProto.FLOAT
     )
+    fp32_tensors.update(i.name for i in graph.initializer if i.data_type == onnx.TensorProto.FLOAT)
 
     def cast_target(node: onnx.NodeProto) -> Optional[int]:
         return get_attribute(node, "to") if node.op_type == "Cast" else None
@@ -1577,7 +1592,7 @@ def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
     producer = {out: node for node in graph.node for out in node.output if out}
     # Subgraph bodies read outer tensors by name without listing them on the owning
     # node, so a name used there is neither rewired nor free to delete.
-    captured = {inp for node in graph.node for inp in _subgraph_inputs(node)}
+    captured = {inp for node in graph.node for inp in _subgraph_reads(node)}
     graph_outputs = {o.name for o in graph.output}
     protected = graph_outputs | captured
 
