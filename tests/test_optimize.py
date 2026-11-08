@@ -1771,3 +1771,149 @@ def test_int32_conversion_keeps_tiny_epsilon_add():
         converted.SerializeToString(), providers=["CPUExecutionProvider"]
     ).run(None, {"x": np.ones((2, 3), dtype=np.float32)})[0]
     assert np.isfinite(got).all()
+
+
+@pytest.mark.parametrize(("op", "idx"), [("Add", 0), ("Add", 1), ("Sub", 1)])
+@pytest.mark.parametrize("as_constant_node", [False, True])
+def test_shield_rewires_tiny_operand(op: str, idx: int, as_constant_node: bool):
+    """Each operand position onnxscript's add_0 and sub_0 rules match is moved to a
+    rank-1 initializer holding the same value; this needs no onnxscript."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import shield_tiny_additive_constants
+
+    eps = numpy_helper.from_array(np.array(1e-10, dtype=np.float32), name="eps")
+    operands = ["x", "eps"] if idx == 1 else ["eps", "x"]
+    nodes = [h.make_node(op, operands, ["out"], name="eps_op")]
+    inits = [eps]
+    if as_constant_node:
+        nodes.insert(0, h.make_node("Constant", [], ["eps"], value=eps))
+        inits = []
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2, 3])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [2, 3])
+    model = h.make_model(
+        h.make_graph(nodes, "g", [x], [out], inits), opset_imports=[h.make_opsetid("", 18)]
+    )
+    model.ir_version = 9
+
+    assert shield_tiny_additive_constants(model) == 1
+    node = next(n for n in model.graph.node if n.name == "eps_op")
+    assert node.input[1 - idx] == "x"
+    copy = next(i for i in model.graph.initializer if i.name == node.input[idx])
+    assert list(copy.dims) == [1]
+    np.testing.assert_array_equal(numpy_helper.to_array(copy), np.array([1e-10], dtype=np.float32))
+    # the original may also feed a node that needs a scalar, so it is not reshaped
+    assert copy.name != "eps"
+    if not as_constant_node:
+        original = next(i for i in model.graph.initializer if i.name == "eps")
+        assert list(original.dims) == []
+
+
+def test_roundtrip_removal_bypasses_pair_after_cast_to_fp32():
+    """A tensor produced by a Cast to FP32 is a known FP32 source even without
+    value_info, such as an integer input cast to float."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    from optimize import remove_fp16_roundtrip_casts
+
+    x = h.make_tensor_value_info("x", TensorProto.INT64, [2])
+    y = h.make_tensor_value_info("y", TensorProto.FLOAT, [2])
+    nodes = [
+        h.make_node("Cast", ["x"], ["s"], name="i2f", to=TensorProto.FLOAT),
+        h.make_node("Cast", ["s"], ["a"], name="c16", to=TensorProto.FLOAT16),
+        h.make_node("Cast", ["a"], ["b"], name="c32", to=TensorProto.FLOAT),
+        h.make_node("Neg", ["b"], ["y"], name="use_b"),
+    ]
+    model = h.make_model(h.make_graph(nodes, "g", [x], [y]), opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    assert remove_fp16_roundtrip_casts(model) == 1
+    assert [n.name for n in model.graph.node] == ["i2f", "use_b"]
+    assert model.graph.node[1].input[0] == "s"
+    onnx.checker.check_model(model, full_check=True)
+
+
+def test_roundtrip_removal_resolves_chained_pairs():
+    """x -> Cast16 -> Cast32 b -> Cast16 -> Cast32 d: the second pair's source is
+    the output of a Cast to FP32, and both pairs resolve back to x."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    from optimize import remove_fp16_roundtrip_casts
+
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2])
+    y = h.make_tensor_value_info("y", TensorProto.FLOAT, [2])
+    nodes = [
+        h.make_node("Cast", ["x"], ["a"], name="c16", to=TensorProto.FLOAT16),
+        h.make_node("Cast", ["a"], ["b"], name="c32", to=TensorProto.FLOAT),
+        h.make_node("Cast", ["b"], ["c"], name="c16b", to=TensorProto.FLOAT16),
+        h.make_node("Cast", ["c"], ["d"], name="c32b", to=TensorProto.FLOAT),
+        h.make_node("Neg", ["d"], ["y"], name="use_d"),
+    ]
+    model = h.make_model(h.make_graph(nodes, "g", [x], [y]), opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    assert remove_fp16_roundtrip_casts(model) == 2
+    assert [n.op_type for n in model.graph.node] == ["Neg"]
+    assert model.graph.node[0].input[0] == "x"
+    onnx.checker.check_model(model, full_check=True)
+
+
+def test_shield_copy_name_avoids_subgraph_names():
+    """An If body that defines eps_shielded makes that name taken for the outer
+    graph too; reusing it would break single assignment."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import shield_tiny_additive_constants
+
+    def body(name: str, out_name: str) -> onnx.GraphProto:
+        out = h.make_tensor_value_info(out_name, TensorProto.FLOAT, [2, 3])
+        return h.make_graph([h.make_node("Neg", ["x"], [out_name])], name, [], [out])
+
+    eps = numpy_helper.from_array(np.array(1e-10, dtype=np.float32), name="eps")
+    cond = h.make_tensor_value_info("cond", TensorProto.BOOL, [])
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2, 3])
+    outputs = [
+        h.make_tensor_value_info("out", TensorProto.FLOAT, [2, 3]),
+        h.make_tensor_value_info("y", TensorProto.FLOAT, [2, 3]),
+    ]
+    nodes = [
+        h.make_node("Add", ["x", "eps"], ["out"], name="eps_add"),
+        h.make_node(
+            "If",
+            ["cond"],
+            ["y"],
+            then_branch=body("t", "eps_shielded"),
+            else_branch=body("e", "e_out"),
+        ),
+    ]
+    model = h.make_model(
+        h.make_graph(nodes, "g", [cond, x], outputs, [eps]), opset_imports=[h.make_opsetid("", 18)]
+    )
+    model.ir_version = 9
+
+    assert shield_tiny_additive_constants(model) == 1
+    add = next(n for n in model.graph.node if n.name == "eps_add")
+    assert add.input[1] != "eps_shielded"
+    onnx.checker.check_model(model, full_check=True)
+
+
+def test_shield_leaves_model_alone_when_shape_inference_fails(monkeypatch):
+    """Without ranks the shield cannot tell a safe copy from one that changes the
+    result shape, so a shape inference error leaves the model as it was."""
+    from optimize import shield_tiny_additive_constants
+
+    def fail(model):
+        raise RuntimeError("shape inference failed")
+
+    monkeypatch.setattr(onnx.shape_inference, "infer_shapes", fail)
+    model = _make_add_eps_model([2, 3])
+    before = model.SerializeToString()
+
+    assert shield_tiny_additive_constants(model) == 0
+    assert model.SerializeToString() == before
