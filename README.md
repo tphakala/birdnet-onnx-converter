@@ -169,8 +169,7 @@ accuracy-critical spectrogram front-end:
 - **FP16 preprocessing protection** - Keeps the STFT/mel MatMuls (or the folded
   front-end Conv) and normalization in FP32 (the CNN backbone goes FP16);
   `--fp16-full` opts out. Initializers shared between the front end and the backbone
-  are split so each side keeps its own precision (the backbone side stays FP32 when
-  an op_block_list node such as Max also reads it), and no FP16 Cast round trip is
+  are split so each side keeps its own precision, and no FP16 Cast round trip is
   left between front-end nodes.
 - **Tiny constants kept** - A scalar Add/Sub constant within 1e-8 of zero (such as the
   1e-10 normalization epsilon) is kept through the onnxscript pass when the other
