@@ -1014,6 +1014,8 @@ def shield_tiny_additive_constants(model: onnx.ModelProto) -> int:
                     and attr.t.data_type in _FLOAT_TYPES
                 ):
                     constants[node.output[0]] = numpy_helper.to_array(attr.t)
+                elif attr.name == "value_float":
+                    constants[node.output[0]] = np.array(attr.f, dtype=np.float32)
 
     def is_tiny(name: str) -> bool:
         value = constants.get(name)

@@ -1707,3 +1707,31 @@ def test_roundtrip_removal_bypasses_pair_on_fp32_initializer():
     assert [n.op_type for n in model.graph.node] == ["Add"]
     assert model.graph.node[0].input[1] == "k"
     onnx.checker.check_model(model, full_check=True)
+
+
+def test_shield_keeps_value_float_constant():
+    """A Constant node written with value_float is a rank-0 constant to onnxscript
+    too, so its Add operand gets the rank-1 copy."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    from optimize import shield_tiny_additive_constants
+
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2, 3])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [2, 3])
+    nodes = [
+        h.make_node("Constant", [], ["eps"], value_float=1e-10),
+        h.make_node("Add", ["x", "eps"], ["out"], name="eps_add"),
+    ]
+    model = h.make_model(
+        h.make_graph(nodes, "g", [x], [out]), opset_imports=[h.make_opsetid("", 18)]
+    )
+    model.ir_version = 9
+
+    assert shield_tiny_additive_constants(model) == 1
+    add = next(n for n in model.graph.node if n.name == "eps_add")
+    copy = next(i for i in model.graph.initializer if i.name == add.input[1])
+    assert list(copy.dims) == [1]
+    np.testing.assert_array_equal(numpy_helper.to_array(copy), np.array([1e-10], dtype=np.float32))
+    onnx.checker.check_model(model, full_check=True)
