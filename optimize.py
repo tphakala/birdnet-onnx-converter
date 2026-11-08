@@ -1572,15 +1572,14 @@ def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
     )
 
     def cast_target(node: onnx.NodeProto) -> Optional[int]:
-        if node.op_type != "Cast":
-            return None
-        return next((attr.i for attr in node.attribute if attr.name == "to"), None)
+        return get_attribute(node, "to") if node.op_type == "Cast" else None
 
     producer = {out: node for node in graph.node for out in node.output if out}
     # Subgraph bodies read outer tensors by name without listing them on the owning
     # node, so a name used there is neither rewired nor free to delete.
     captured = {inp for node in graph.node for inp in _subgraph_inputs(node)}
     graph_outputs = {o.name for o in graph.output}
+    protected = graph_outputs | captured
 
     bypassed: dict[str, str] = {}
     for node in graph.node:
@@ -1594,7 +1593,7 @@ def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
         if source in fp32_tensors or (
             origin is not None and cast_target(origin) == onnx.TensorProto.FLOAT
         ):
-            if node.output[0] not in graph_outputs | captured:
+            if node.output[0] not in protected:
                 bypassed[node.output[0]] = source
     if not bypassed:
         return 0
@@ -1611,7 +1610,7 @@ def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
 
     # Remove the second Casts, then any first Cast nothing reads any more.
     keep = [n for n in graph.node if not (n.op_type == "Cast" and n.output[0] in bypassed)]
-    consumed = {i for n in keep for i in n.input} | graph_outputs | captured
+    consumed = {i for n in keep for i in n.input} | protected
     removed = set(bypassed)
     final = []
     for n in keep:
