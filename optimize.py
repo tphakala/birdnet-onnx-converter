@@ -953,6 +953,87 @@ def optimize_with_onnxslim(model: onnx.ModelProto) -> onnx.ModelProto:
     return model
 
 
+# onnxscript's add_0 / sub_0 rewrite rules (rewriter/rules/common/_no_op.py) match a
+# scalar constant within 1e-8 of zero and delete the Add/Sub as a no-op. A scalar
+# epsilon such as the 1e-10 in x / (max - min + 1e-10) is inside that window, so the
+# optimizer drops it and the division yields 0/0 on constant input. The matcher only
+# accepts rank-0 constants, so a rank-1 copy of the epsilon is left alone.
+_TINY_CONSTANT_LIMIT = 1e-6
+_FLOAT_TYPES = (
+    onnx.TensorProto.FLOAT,
+    onnx.TensorProto.FLOAT16,
+    onnx.TensorProto.DOUBLE,
+)
+
+
+def shield_tiny_additive_constants(model: onnx.ModelProto) -> int:
+    """Give each tiny scalar Add/Sub operand a private rank-1 copy.
+
+    A copy is made rather than reshaping the original because the original may
+    also feed a node that needs a scalar (the 1e-10 epsilon is often shared with a
+    Clip min). The copy is only used when the other operand's rank is known to be
+    at least 1, so broadcasting leaves the result shape unchanged. Mutates the
+    model in place and returns the number of operands shielded.
+    """
+    constants: dict[str, np.ndarray] = {}
+    for init in model.graph.initializer:
+        if len(init.dims) == 0 and init.data_type in _FLOAT_TYPES:
+            constants[init.name] = numpy_helper.to_array(init)
+    for node in model.graph.node:
+        if node.op_type == "Constant" and node.output:
+            for attr in node.attribute:
+                if (
+                    attr.name == "value"
+                    and len(attr.t.dims) == 0
+                    and attr.t.data_type in _FLOAT_TYPES
+                ):
+                    constants[node.output[0]] = numpy_helper.to_array(attr.t)
+
+    def is_tiny(name: str) -> bool:
+        value = constants.get(name)
+        return value is not None and 0 < abs(float(value)) < _TINY_CONSTANT_LIMIT
+
+    candidates = [
+        (node, idx)
+        for node in model.graph.node
+        if node.op_type in ("Add", "Sub") and len(node.input) == 2
+        for idx in ((0, 1) if node.op_type == "Add" else (1,))
+        if is_tiny(node.input[idx])
+    ]
+    if not candidates:
+        return 0
+
+    try:
+        inferred = onnx.shape_inference.infer_shapes(model)
+    except Exception as e:
+        print(f"  Warning: shape inference failed, tiny constants not shielded: {e}")
+        return 0
+    rank = {
+        vi.name: len(vi.type.tensor_type.shape.dim)
+        for vi in chain(inferred.graph.input, inferred.graph.value_info, inferred.graph.output)
+        if vi.type.tensor_type.HasField("shape")
+    }
+    rank.update({init.name: len(init.dims) for init in model.graph.initializer})
+
+    used = {init.name for init in model.graph.initializer}
+    shielded = 0
+    for node, idx in candidates:
+        if rank.get(node.input[1 - idx], 0) < 1:
+            continue
+        name = node.input[idx]
+        copy_name = f"{name}_shielded"
+        suffix = 1
+        while copy_name in used:
+            suffix += 1
+            copy_name = f"{name}_shielded{suffix}"
+        used.add(copy_name)
+        value = constants[name].reshape(1)
+        model.graph.initializer.append(numpy_helper.from_array(value, copy_name))
+        node.input[idx] = copy_name
+        shielded += 1
+    return shielded
+
+
 def optimize_with_onnxscript(model: onnx.ModelProto, remove_casts: bool = True) -> onnx.ModelProto:
     """Run onnxscript optimizer with optional Cast removal."""
     try:
@@ -961,6 +1042,9 @@ def optimize_with_onnxscript(model: onnx.ModelProto, remove_casts: bool = True) 
         from onnxscript import rewriter
         from onnxscript.rewriter import pattern
 
+        shielded = shield_tiny_additive_constants(model)
+        if shielded:
+            print(f"  Shielded {shielded} tiny Add/Sub constant(s) from no-op removal")
         ir_model = ir.from_proto(model)
 
         if remove_casts:
@@ -1399,6 +1483,135 @@ def find_preprocessing_node_names(model: onnx.ModelProto) -> set[str]:
     return names
 
 
+def untie_blocked_shared_initializers(model: onnx.ModelProto, block_names: set[str]) -> int:
+    """Give blocked nodes a private copy of each FP32 initializer they share with
+    unblocked nodes.
+
+    onnxconverter-common keeps an initializer in FP32 when any node in
+    node_block_list consumes it, even if unblocked nodes consume it too. Those
+    unblocked nodes are converted to FP16, so they end up with one FP32 and one
+    FP16 operand (ORT rejects a Clip whose min/max types differ). After this
+    runs the original name is read only by unblocked nodes and is converted,
+    while the blocked nodes read an FP32 copy. Duplicate-constant folding in
+    onnxsim makes such sharing common. Must run before float16 conversion;
+    mutates the model in place. Returns the number of initializers split.
+    """
+    float32_inits = {
+        init.name: init
+        for init in model.graph.initializer
+        if init.data_type == onnx.TensorProto.FLOAT
+    }
+    blocked_users: dict[str, list[onnx.NodeProto]] = {}
+    has_free_user: set[str] = set()
+    for node in model.graph.node:
+        blocked = node.name in block_names
+        for inp in node.input:
+            if inp not in float32_inits:
+                continue
+            if blocked:
+                blocked_users.setdefault(inp, []).append(node)
+            else:
+                has_free_user.add(inp)
+
+    used = {init.name for init in model.graph.initializer}
+    for node in model.graph.node:
+        used.update(node.input)
+        used.update(node.output)
+
+    split = 0
+    for name in sorted(has_free_user & blocked_users.keys()):
+        copy_name = f"{name}_fp32"
+        suffix = 1
+        while copy_name in used:
+            suffix += 1
+            copy_name = f"{name}_fp32_{suffix}"
+        used.add(copy_name)
+        copy = onnx.TensorProto()
+        copy.CopyFrom(float32_inits[name])
+        copy.name = copy_name
+        model.graph.initializer.append(copy)
+        for node in blocked_users[name]:
+            node.input[:] = [copy_name if i == name else i for i in node.input]
+        split += 1
+    return split
+
+
+def remove_fp16_roundtrip_casts(model: onnx.ModelProto) -> int:
+    """Drop FP32 -> FP16 -> FP32 Cast pairs left inside the FP32 region.
+
+    onnxconverter-common wraps every node_block_list node with a Cast to FP16 on
+    its outputs and a Cast to FP32 on its inputs. Between two blocked nodes that
+    makes tensor -> Cast(FP16) -> Cast(FP32) -> tensor, which rounds the value to
+    FP16 inside a region that is meant to stay FP32, and its own pair cleanup
+    does not catch every case. Consumers of the second Cast are rewired to the
+    original FP32 tensor, and Cast nodes left without consumers are removed.
+    Cast pairs whose first input is not known to be FP32 are left alone. Runs
+    after conversion; mutates the model in place. Returns the number of pairs
+    bypassed.
+    """
+    graph = model.graph
+    fp32_tensors = {
+        i.name for i in graph.input if i.type.tensor_type.elem_type == onnx.TensorProto.FLOAT
+    }
+    fp32_tensors.update(
+        vi.name
+        for vi in graph.value_info
+        if vi.type.tensor_type.elem_type == onnx.TensorProto.FLOAT
+    )
+
+    def cast_target(node: onnx.NodeProto) -> Optional[int]:
+        if node.op_type != "Cast":
+            return None
+        return next((attr.i for attr in node.attribute if attr.name == "to"), None)
+
+    producer = {out: node for node in graph.node for out in node.output if out}
+    graph_outputs = {o.name for o in graph.output}
+
+    bypassed: dict[str, str] = {}
+    for node in graph.node:
+        if cast_target(node) != onnx.TensorProto.FLOAT:
+            continue
+        first = producer.get(node.input[0])
+        if first is None or cast_target(first) != onnx.TensorProto.FLOAT16:
+            continue
+        source = first.input[0]
+        origin = producer.get(source)
+        if source in fp32_tensors or (
+            origin is not None and cast_target(origin) == onnx.TensorProto.FLOAT
+        ):
+            if node.output[0] not in graph_outputs:
+                bypassed[node.output[0]] = source
+    if not bypassed:
+        return 0
+
+    def resolve(name: str) -> str:
+        while name in bypassed:
+            name = bypassed[name]
+        return name
+
+    for node in graph.node:
+        if node.op_type == "Cast" and node.output[0] in bypassed:
+            continue
+        node.input[:] = [resolve(i) for i in node.input]
+
+    # Remove the second Casts, then any first Cast nothing reads any more.
+    keep = [n for n in graph.node if not (n.op_type == "Cast" and n.output[0] in bypassed)]
+    consumed = {i for n in keep for i in n.input} | graph_outputs
+    removed = set(bypassed)
+    final = []
+    for n in keep:
+        if cast_target(n) == onnx.TensorProto.FLOAT16 and n.output[0] not in consumed:
+            removed.add(n.output[0])
+            continue
+        final.append(n)
+    del graph.node[:]
+    graph.node.extend(final)
+    stale = [vi for vi in graph.value_info if vi.name in removed]
+    for vi in stale:
+        graph.value_info.remove(vi)
+    return len(bypassed)
+
+
 def find_swish_node_names(model: onnx.ModelProto) -> set[str]:
     """Return the node names of sigmoid-gated activations (Swish/SiLU: x*sigmoid(x),
     and SE-style x*sigmoid(gate)).
@@ -1499,6 +1712,10 @@ def convert_to_fp16(
             print("  No Swish/SiLU activations identified")
 
     node_block_list = sorted(block_names) if block_names else None
+    if block_names:
+        untied = untie_blocked_shared_initializers(model, block_names)
+        if untied:
+            print(f"  Split {untied} initializer(s) shared across the FP32/FP16 boundary")
 
     try:
         from onnxconverter_common import float16
@@ -1535,6 +1752,11 @@ def convert_to_fp16(
         )
     if vi_fixes > 0:
         print(f"  Corrected {vi_fixes} stale value_info annotation(s)")
+
+    if block_names:
+        bypassed = remove_fp16_roundtrip_casts(model_fp16)
+        if bypassed:
+            print(f"  Removed {bypassed} FP32->FP16->FP32 Cast round trip(s) in the FP32 region")
 
     return model_fp16  # type: ignore[no-any-return]
 

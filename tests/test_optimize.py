@@ -1240,3 +1240,132 @@ def test_find_preprocessing_node_names_falls_back_to_first_conv_without_2d_conv(
     model.ir_version = 9
 
     assert find_preprocessing_node_names(model) == {"pre_mul", "pre_unsqueeze"}
+
+
+def _make_shared_const_frontend_model() -> onnx.ModelProto:
+    """A front end whose first node feeds two others, then a backbone Conv and a
+    Clip(max=s). The scalar `s` is read by both a front-end node and the Clip (the
+    layout onnxsim produces by deduplicating constants); the fan-out is what leaves
+    an FP32 -> FP16 -> FP32 Cast pair behind in the converted graph."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    x = h.make_tensor_value_info("X", TensorProto.FLOAT, [1, 1, 4, 4])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [1, 1, 4, 4])
+    inits = [
+        numpy_helper.from_array(np.array(4.0, dtype=np.float32), name="s"),
+        numpy_helper.from_array(np.array([0.25], dtype=np.float32), name="b"),
+        numpy_helper.from_array(np.full((1, 1, 1, 1), 0.5, dtype=np.float32), name="w"),
+    ]
+    nodes = [
+        h.make_node("Mul", ["X", "s"], ["m"], name="pre_mul"),
+        h.make_node("Add", ["m", "b"], ["a"], name="pre_add"),
+        h.make_node("Mul", ["m", "b"], ["a2"], name="pre_scale"),
+        h.make_node("Add", ["a", "a2"], ["a3"], name="pre_sum"),
+        h.make_node("Conv", ["a3", "w"], ["c"], name="stem_conv"),
+        h.make_node("Clip", ["c", "", "s"], ["out"], name="post_clip"),
+    ]
+    graph = h.make_graph(nodes, "shared_const", [x], [out], inits)
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+    return model
+
+
+def test_fp16_splits_initializer_shared_across_block_boundary():
+    """An initializer read by a front-end node and by an FP16 node must not stay
+    FP32 under the FP16 node: ORT rejects a Clip with mixed float16/float types."""
+    import numpy as np
+    import onnxruntime as ort
+
+    from optimize import convert_to_fp16
+
+    reference = _make_shared_const_frontend_model()
+    x = np.random.default_rng(0).standard_normal((1, 1, 4, 4)).astype(np.float32)
+    expected = ort.InferenceSession(
+        reference.SerializeToString(), providers=["CPUExecutionProvider"]
+    ).run(None, {"X": x})[0]
+
+    fp16 = convert_to_fp16(_make_shared_const_frontend_model())
+    assert fp16 is not None
+
+    dtypes = {i.name: i.data_type for i in fp16.graph.initializer}
+    pre_mul = next(n for n in fp16.graph.node if n.name == "pre_mul")
+    post_clip = next(n for n in fp16.graph.node if n.name == "post_clip")
+    assert dtypes[pre_mul.input[1]] == onnx.TensorProto.FLOAT
+    assert dtypes[post_clip.input[2]] == onnx.TensorProto.FLOAT16
+    assert pre_mul.input[1] != post_clip.input[2]
+
+    got = ort.InferenceSession(fp16.SerializeToString(), providers=["CPUExecutionProvider"]).run(
+        None, {"X": x}
+    )[0]
+    np.testing.assert_allclose(got, expected, atol=1e-2)
+
+
+def test_fp16_front_end_has_no_fp16_round_trip():
+    """Between two front-end nodes the tensor stays FP32: no Cast to FP16 may feed
+    a Cast back to FP32, which would round the front-end value to FP16."""
+    from optimize import convert_to_fp16
+
+    fp16 = convert_to_fp16(_make_shared_const_frontend_model())
+    assert fp16 is not None
+
+    def cast_to(node: onnx.NodeProto) -> int:
+        return next(a.i for a in node.attribute if a.name == "to")
+
+    casts = {n.output[0]: n for n in fp16.graph.node if n.op_type == "Cast"}
+    round_trips = [
+        n.name
+        for n in casts.values()
+        if cast_to(n) == onnx.TensorProto.FLOAT
+        and n.input[0] in casts
+        and cast_to(casts[n.input[0]]) == onnx.TensorProto.FLOAT16
+    ]
+    assert round_trips == []
+
+
+def _make_epsilon_division_model() -> onnx.ModelProto:
+    """out = (x - y) / ((x - y) + 1e-10), with the epsilon shared with a Clip min as
+    onnxsim leaves it. Fed x == y it is 0 / 1e-10 = 0; without the epsilon, 0 / 0."""
+    import numpy as np
+    import onnx.helper as h
+    from onnx import TensorProto, numpy_helper
+
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2, 3])
+    y = h.make_tensor_value_info("y", TensorProto.FLOAT, [2, 3])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [2, 3])
+    eps = numpy_helper.from_array(np.array(1e-10, dtype=np.float32), name="eps")
+    nodes = [
+        h.make_node("Sub", ["x", "y"], ["d"], name="diff"),
+        h.make_node("Add", ["d", "eps"], ["den"], name="eps_add"),
+        h.make_node("Div", ["d", "den"], ["q"], name="ratio"),
+        h.make_node("Clip", ["q", "eps"], ["out"], name="floor_clip"),
+    ]
+    graph = h.make_graph(nodes, "eps_div", [x, y], [out], [eps])
+    model = h.make_model(graph, opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+    return model
+
+
+def test_onnxscript_pass_keeps_tiny_epsilon_add():
+    """onnxscript's add_0 rule treats a scalar within 1e-8 of zero as zero and
+    deletes the Add. The epsilon must survive so a constant input does not divide
+    0 by 0."""
+    import numpy as np
+    import onnxruntime as ort
+
+    pytest.importorskip("onnxscript")
+    from optimize import optimize_with_onnxscript
+
+    model = optimize_with_onnxscript(_make_epsilon_division_model(), remove_casts=False)
+
+    assert [n.op_type for n in model.graph.node].count("Add") == 1
+    const = np.full((2, 3), 2.0, dtype=np.float32)
+    got = ort.InferenceSession(model.SerializeToString(), providers=["CPUExecutionProvider"]).run(
+        None, {"x": const, "y": const}
+    )[0]
+    assert np.isfinite(got).all()
+    # the Clip min still sees a scalar, so the shared epsilon was copied, not reshaped
+    clip = next(n for n in model.graph.node if n.op_type == "Clip")
+    scalar = next(i for i in model.graph.initializer if i.name == clip.input[1])
+    assert list(scalar.dims) == []
