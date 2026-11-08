@@ -1735,3 +1735,39 @@ def test_shield_keeps_value_float_constant():
     assert list(copy.dims) == [1]
     np.testing.assert_array_equal(numpy_helper.to_array(copy), np.array([1e-10], dtype=np.float32))
     onnx.checker.check_model(model, full_check=True)
+
+
+def test_int32_conversion_keeps_tiny_epsilon_add():
+    """The INT32 to INT64 step runs the onnxscript optimizer too; it must not delete
+    the epsilon Add before the later onnxscript pass sees it."""
+    import numpy as np
+    import onnx.helper as h
+    import onnxruntime as ort
+    from onnx import TensorProto, numpy_helper
+
+    pytest.importorskip("onnx_ir")
+    pytest.importorskip("onnxscript")
+    from optimize import convert_int32_to_int64
+
+    idx = numpy_helper.from_array(np.array([0, 1], dtype=np.int32), name="idx")
+    eps = numpy_helper.from_array(np.array(1e-10, dtype=np.float32), name="eps")
+    x = h.make_tensor_value_info("x", TensorProto.FLOAT, [2, 3])
+    out = h.make_tensor_value_info("out", TensorProto.FLOAT, [2, 3])
+    nodes = [
+        h.make_node("Gather", ["x", "idx"], ["g"]),
+        h.make_node("Sub", ["g", "g"], ["d"]),
+        h.make_node("Add", ["d", "eps"], ["den"]),
+        h.make_node("Div", ["d", "den"], ["out"]),
+    ]
+    model = h.make_model(
+        h.make_graph(nodes, "g", [x], [out], [idx, eps]), opset_imports=[h.make_opsetid("", 18)]
+    )
+    model.ir_version = 9
+
+    converted, count = convert_int32_to_int64(model)
+    assert count == 1
+    assert "Add" in [n.op_type for n in converted.graph.node]
+    got = ort.InferenceSession(
+        converted.SerializeToString(), providers=["CPUExecutionProvider"]
+    ).run(None, {"x": np.ones((2, 3), dtype=np.float32)})[0]
+    assert np.isfinite(got).all()

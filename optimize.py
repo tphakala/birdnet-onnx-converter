@@ -823,6 +823,11 @@ def convert_int32_to_int64(model: onnx.ModelProto) -> tuple[onnx.ModelProto, int
         print(f"  onnx_ir or onnxscript not available ({e}), skipping INT32->INT64 conversion")
         return model, 0
 
+    # The optimizer run in step 3 applies the same no-op rules as the later pass
+    shielded = shield_tiny_additive_constants(model)
+    if shielded:
+        print(f"  Shielded {shielded} tiny Add/Sub constant(s) from no-op removal")
+
     # Convert to IR representation
     ir_model = ir.from_proto(model)
 
