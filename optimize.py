@@ -1519,8 +1519,9 @@ def untie_blocked_shared_initializers(model: onnx.ModelProto, block_names: set[s
     node_block_list consumes it, even if unblocked nodes consume it too. Those
     unblocked nodes are converted to FP16, so they end up with one FP32 and one
     FP16 operand (ORT rejects a Clip whose min/max types differ). After this
-    runs the original name is read only by unblocked nodes and is converted,
-    while the blocked nodes read an FP32 copy. Duplicate-constant folding in
+    runs the original name is read only by unblocked nodes, while the blocked
+    nodes read an FP32 copy. The original is converted unless one of its readers
+    is an op_block_list node, which onnxconverter-common also keeps in FP32. Duplicate-constant folding in
     onnxsim makes such sharing common. Must run before float16 conversion;
     mutates the model in place. Returns the number of initializers split.
     """
