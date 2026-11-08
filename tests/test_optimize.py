@@ -1917,3 +1917,25 @@ def test_shield_leaves_model_alone_when_shape_inference_fails(monkeypatch):
 
     assert shield_tiny_additive_constants(model) == 0
     assert model.SerializeToString() == before
+
+
+def test_roundtrip_removal_keeps_pair_with_non_fp32_source():
+    """An INT64 tensor cast to FP16 and back to FP32 is a real conversion; reading
+    the INT64 source directly would give the consumer the wrong type."""
+    import onnx.helper as h
+    from onnx import TensorProto
+
+    from optimize import remove_fp16_roundtrip_casts
+
+    x = h.make_tensor_value_info("x", TensorProto.INT64, [2])
+    y = h.make_tensor_value_info("y", TensorProto.FLOAT, [2])
+    nodes = [
+        h.make_node("Cast", ["x"], ["a"], name="c16", to=TensorProto.FLOAT16),
+        h.make_node("Cast", ["a"], ["b"], name="c32", to=TensorProto.FLOAT),
+        h.make_node("Neg", ["b"], ["y"], name="use_b"),
+    ]
+    model = h.make_model(h.make_graph(nodes, "g", [x], [y]), opset_imports=[h.make_opsetid("", 18)])
+    model.ir_version = 9
+
+    assert remove_fp16_roundtrip_casts(model) == 0
+    assert [n.name for n in model.graph.node] == ["c16", "c32", "use_b"]
