@@ -4,7 +4,7 @@ numpy>=2.2.6
 onnxruntime>=1.24.3
 
 # Optimization tools
-onnxslim>=0.1.94
+onnxslim>=0.1.99
 # onnx-simplifier requires cmake and has limited Python version support
 # Install separately: pip install onnx-simplifier
 
