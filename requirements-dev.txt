@@ -1,5 +1,5 @@
 # Testing
-pytest>=8.4.2
+pytest>=9.2.0
 
 # Linting
 ruff>=0.15.20
