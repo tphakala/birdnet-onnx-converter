@@ -1655,7 +1655,7 @@ def find_swish_node_names(model: onnx.ModelProto) -> set[str]:
 
     These are kept in FP32 during FP16 conversion (CLI --fp16-keep-activations-fp32)
     so ONNX Runtime's CPU EP can fuse its FP32 QuickGelu kernel; an all-FP16 graph
-    runs them unfused and is much slower on ARM/CPU. Both the Mul and the Sigmoid
+    runs them unfused. Both the Mul and the Sigmoid
     feeding it are returned so the fusable pair stays FP32 together.
 
     Blocks by node name, not by the Mul/Sigmoid op types, so unrelated multiplies
@@ -1716,10 +1716,9 @@ def convert_to_fp16(
     When keep_activations_fp32 is True (CLI --fp16-keep-activations-fp32), the
     sigmoid-gated Swish/SiLU activation nodes (found by name, not op type) are
     additionally kept in FP32 so ONNX Runtime's CPU EP can fuse them into its FP32
-    QuickGelu kernel; the conv/matmul weights stay FP16. This recovers most of the
-    FP16 latency on ARM/CPU at a small runtime-RAM cost (activation buffers stay
-    FP32), but does not fix the accuracy loss of FP16 arithmetic on CPUs that have
-    it (RPi 5).
+    QuickGelu kernel; the conv/matmul weights stay FP16. Activation buffers stay
+    FP32 (a small runtime-RAM cost). It does not fix the accuracy loss of FP16
+    arithmetic on CPUs that have it (RPi 5).
 
     Note: the input model is mutated in place by the decouple step. Callers that
     still need the original FP32 graph afterward should save or copy it first
@@ -2545,8 +2544,8 @@ def main():
         "--fp16-keep-activations-fp32",
         action="store_true",
         help="Keep Swish/SiLU activations (Sigmoid x Mul) in FP32 during FP16 "
-        "conversion so ONNX Runtime's CPU EP can fuse QuickGelu. Recovers most "
-        "FP16 latency on ARM/CPU (weights stay FP16); small runtime-RAM cost. "
+        "conversion so ONNX Runtime's CPU EP can fuse QuickGelu. Weights stay "
+        "FP16; small runtime-RAM cost. "
         "Validate accuracy on the device: FP16 arithmetic (RPi 5) can lose it.",
     )
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantization")

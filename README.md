@@ -14,9 +14,9 @@ Convert and optimize BirdNET models for ONNX Runtime inference on various platfo
     spectrogram preprocessing front-end (STFT/mel MatMuls and normalization) is
     kept in FP32 by default to preserve accuracy; pass `--fp16-full` to convert
     the entire graph. On ARM/CPU, `--fp16-keep-activations-fp32` keeps the
-    Swish/SiLU activations in FP32 so ONNX Runtime's CPU EP can fuse QuickGelu,
-    recovering most of the FP16 latency (weights stay FP16; small runtime-RAM cost;
-    accuracy caveat under Raspberry Pi 5).
+    Swish/SiLU activations in FP32 so ONNX Runtime's CPU EP can fuse QuickGelu
+    (weights stay FP16; small runtime-RAM cost; measured speed and accuracy under
+    Raspberry Pi 5).
   - INT8 - Dynamic quantization to cut RAM (no calibration data needed). The
     spectrogram preprocessing is excluded so it stays full precision.
     `--int8-arm` is the recommended variant: it quantizes only MatMul weights
@@ -93,7 +93,7 @@ python optimize.py --input BirdNET_Model.onnx --output BirdNET --int8-arm
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-full
 
 # FP16: keep the Swish/SiLU activations (Sigmoid x Mul) in FP32 so ONNX Runtime's
-# CPU EP can fuse QuickGelu (faster FP16 on ARM/CPU; validate accuracy on the device)
+# CPU EP can fuse QuickGelu (measured speed and accuracy under Raspberry Pi 5)
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-keep-activations-fp32
 
 # Fold each spectrogram's window, DFT and mel filterbank into one strided Conv
