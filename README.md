@@ -205,8 +205,8 @@ accuracy loss. Use FP16 only if it matches FP32 on your own audio on the device.
 
 ```python
 import onnxruntime as ort
-session = ort.InferenceSession("perch_v2_int8_arm.onnx")  # low RAM
-# session = ort.InferenceSession("BirdNET_fp32.onnx")     # default
+session = ort.InferenceSession("BirdNET_fp32.onnx")  # default
+# session = ort.InferenceSession("BirdNET_int8_arm.onnx")  # low RAM
 ```
 
 ### Raspberry Pi 3/4
