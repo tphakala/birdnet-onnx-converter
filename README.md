@@ -10,12 +10,13 @@ Convert and optimize BirdNET models for ONNX Runtime inference on various platfo
 - **Output pruning** - Strip unused model outputs to reduce compute
 - **Multiple precision formats**:
   - FP32 - Standard precision for GPU/desktop
-  - FP16 - Half precision for devices with FP16 support (RPi 5, modern GPUs). The
+  - FP16 - Half precision, mainly for GPUs. The
     spectrogram preprocessing front-end (STFT/mel MatMuls and normalization) is
     kept in FP32 by default to preserve accuracy; pass `--fp16-full` to convert
     the entire graph. On ARM/CPU, `--fp16-keep-activations-fp32` keeps the
     Swish/SiLU activations in FP32 so ONNX Runtime's CPU EP can fuse QuickGelu,
-    recovering most of the FP16 latency (weights stay FP16; small runtime-RAM cost).
+    recovering most of the FP16 latency (weights stay FP16; small runtime-RAM cost;
+    accuracy caveat under Raspberry Pi 5).
   - INT8 - Dynamic quantization to cut RAM (no calibration data needed). The
     spectrogram preprocessing is excluded so it stays full precision.
     `--int8-arm` is the recommended variant: it quantizes only MatMul weights
@@ -92,7 +93,7 @@ python optimize.py --input BirdNET_Model.onnx --output BirdNET --int8-arm
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-full
 
 # FP16: keep the Swish/SiLU activations (Sigmoid x Mul) in FP32 so ONNX Runtime's
-# CPU EP can fuse QuickGelu (much faster FP16 on ARM/CPU; weights stay FP16)
+# CPU EP can fuse QuickGelu (faster FP16 on ARM/CPU; validate accuracy on the device)
 python optimize.py --input BirdNET_Model.onnx --output BirdNET --fp16-keep-activations-fp32
 
 # Fold each spectrogram's window, DFT and mel filterbank into one strided Conv
@@ -126,7 +127,7 @@ python optimize.py --input mdata_raw.onnx --output mdata_where.onnx \
 | File | Description | Recommended Use |
 | ---- | ----------- | --------------- |
 | `*_fp32.onnx` | Full precision | GPU (CUDA/TensorRT), Desktop CPU |
-| `*_fp16.onnx` | Half precision | RPi 5, Modern GPUs |
+| `*_fp16.onnx` | Half precision | Modern GPUs |
 | `*_int8.onnx` | INT8 dynamic, all ops (Conv int8 breaks ARM accuracy) | x86 CPU only, validate |
 | `*_int8_arm.onnx` | Partial INT8 (MatMul-only, front-end FP32), `--int8-arm` | RPi 4/5 / ARM, low RAM (recommended) |
 
@@ -193,14 +194,19 @@ This tool supports conversion and optimization of:
 ### Raspberry Pi 5
 
 For low RAM, use the partial INT8 (`--int8-arm`) model: on Perch v2 it cuts peak
-RSS ~64% (816 -> 293 MB) with top-1 preserved. For lowest latency where RAM is
-not tight, use FP16 (regenerate with `--fp16-keep-activations-fp32` on complex
-graphs such as Perch):
+RSS ~64% (816 -> 293 MB) with top-1 preserved. Otherwise use FP32.
+
+FP16 is not a safe default here. The Cortex-A76 computes FP16 models in half
+precision (x86 and the RPi 4 compute them in FP32, so tests there miss this). On
+BirdNET+ V3.0 that dropped the FP32/FP16 prediction correlation to 0.74 on
+noise-like input, and plain FP16 ran slower than FP32. `--fp16-keep-activations-fp32`
+was about 20% faster than FP32 on one thread (no gain on four) with the same
+accuracy loss. Use FP16 only if it matches FP32 on your own audio on the device.
 
 ```python
 import onnxruntime as ort
 session = ort.InferenceSession("perch_v2_int8_arm.onnx")  # low RAM
-# session = ort.InferenceSession("BirdNET_fp16.onnx")     # low latency
+# session = ort.InferenceSession("BirdNET_fp32.onnx")     # default
 ```
 
 ### Raspberry Pi 3/4

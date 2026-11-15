@@ -21,9 +21,10 @@ Key optimizations:
 
 Output formats:
 - FP32: Standard precision for GPU/desktop CPU
-- FP16: Half precision for devices with FP16 hardware (RPi 5, modern GPUs). The
-  spectrogram preprocessing front-end is kept in FP32 by default for accuracy;
-  use --fp16-full to convert the entire graph.
+- FP16: Half precision, mainly for GPUs. CPUs with FP16 arithmetic (RPi 5) can
+  lose accuracy, so validate there against FP32. The spectrogram preprocessing
+  front-end is kept in FP32 by default for accuracy; use --fp16-full to convert
+  the entire graph.
 - INT8: Quantized for low-power devices (RPi 3/4, embedded ARM). Experimental:
   dynamic quantization can significantly degrade accuracy; validate before use.
 
@@ -66,7 +67,7 @@ INT8_EXPERIMENTAL_WARNING = (
     "INT8 quantization is EXPERIMENTAL and not recommended for production. "
     "Dynamic quantization can significantly degrade accuracy and may change the "
     "top predicted species. Validate INT8 output against FP32/FP16 before "
-    "deploying, and prefer FP16 where the target supports it. Use --no-int8 (and "
+    "deploying, and prefer FP32 where RAM allows. Use --no-int8 (and "
     "omit --int8-arm) to skip."
 )
 
@@ -1717,7 +1718,8 @@ def convert_to_fp16(
     additionally kept in FP32 so ONNX Runtime's CPU EP can fuse them into its FP32
     QuickGelu kernel; the conv/matmul weights stay FP16. This recovers most of the
     FP16 latency on ARM/CPU at a small runtime-RAM cost (activation buffers stay
-    FP32).
+    FP32), but does not fix the accuracy loss of FP16 arithmetic on CPUs that have
+    it (RPi 5).
 
     Note: the input model is mutated in place by the decouple step. Callers that
     still need the original FP32 graph afterward should save or copy it first
@@ -2544,7 +2546,8 @@ def main():
         action="store_true",
         help="Keep Swish/SiLU activations (Sigmoid x Mul) in FP32 during FP16 "
         "conversion so ONNX Runtime's CPU EP can fuse QuickGelu. Recovers most "
-        "FP16 latency on ARM/CPU (weights stay FP16); small runtime-RAM cost.",
+        "FP16 latency on ARM/CPU (weights stay FP16); small runtime-RAM cost. "
+        "Validate accuracy on the device: FP16 arithmetic (RPi 5) can lose it.",
     )
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantization")
     parser.add_argument(
@@ -2720,7 +2723,7 @@ def main():
     print("  GPU (CUDA/TensorRT):    Use FP32 or FP16")
     print("  RPi 4/5, low RAM:       Use INT8-ARM (partial, MatMul-only): large RSS cut")
     print("                          with top-1 preserved on Perch v2; validate on real audio")
-    print("  RPi 5, speed over RAM:  FP16 (add --fp16-keep-activations-fp32 on complex graphs)")
+    print("  RPi 5, speed over RAM:  FP32 (validate FP16 on the device first)")
     print("  Desktop CPU (Intel):    Use FP32")
     print("  Desktop CPU (ARM):      Use INT8-ARM (validate accuracy)")
     print("")
